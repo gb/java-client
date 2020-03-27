@@ -1,8 +1,10 @@
 package io.split.client;
 
 import io.split.client.api.Key;
+import io.split.client.api.SplitResult;
 
 import java.util.Map;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Created by adilaijaz on 5/8/15.
@@ -91,6 +93,52 @@ public interface SplitClient {
      */
     String getTreatment(Key key, String split, Map<String, Object> attributes);
 
+    /**
+     * Same as {@link #getTreatment(String, String)} but it returns the configuration associated to the
+     * matching treatment if any. Otherwise {@link SplitResult.configurations()} will be null.
+     * <p/>
+     * <p/>
+     * Examples include showing a different treatment to users on trial plan
+     * vs. premium plan. Another example is to show a different treatment
+     * to users created after a certain date.
+     *
+     * @param key         a unique key of your customer (e.g. user_id, user_email, account_id, etc.) MUST not be null.
+     * @param split    the feature we want to evaluate. MUST NOT be null.
+     * @return SplitResult containing the evaluated treatment (the default treatment of this feature, or 'control') and
+     *         a configuration associated to this treatment if set.
+     */
+    SplitResult getTreatmentWithConfig(String key, String split);
+
+    /**
+     * Same as {@link #getTreatment(String, String, Map)} but it returns the configuration associated to the
+     * matching treatment if any. Otherwise {@link SplitResult.configurations()} will be null.
+     * <p/>
+     * <p/>
+     * Examples include showing a different treatment to users on trial plan
+     * vs. premium plan. Another example is to show a different treatment
+     * to users created after a certain date.
+     *
+     * @param key         a unique key of your customer (e.g. user_id, user_email, account_id, etc.) MUST not be null.
+     * @param split    the feature we want to evaluate. MUST NOT be null.
+     * @param attributes of the customer (user, account etc.) to use in evaluation. Can be null or empty.
+     * @return SplitResult containing the evaluated treatment (the default treatment of this feature, or 'control') and
+     *         a configuration associated to this treatment if set.
+     */
+    SplitResult getTreatmentWithConfig(String key, String split, Map<String, Object> attributes);
+
+    /**
+     * Same as {@link #getTreatment(Key, String, Map)} but it returns the configuration associated to the
+     * matching treatment if any. Otherwise {@link SplitResult.configurations()} will be null.
+     *
+     * @param key the matching and bucketing keys. MUST NOT be null.
+     * @param split the feature we want to evaluate. MUST NOT be null.
+     * @param attributes of the entity (user, account etc.) to use in evaluation. Can be null or empty.
+     *
+     * @return SplitResult containing the evaluated treatment (the default treatment of this feature, or 'control') and
+     *         a configuration associated to this treatment if set.
+     */
+    SplitResult getTreatmentWithConfig(Key key, String split, Map<String, Object> attributes);
+
 
     /**
      * Destroys the background processes and clears the cache, releasing the resources used by
@@ -126,4 +174,48 @@ public interface SplitClient {
      * @return true if the track was successful, false otherwise
      */
     boolean track(String key, String trafficType, String eventType, double value);
+
+    /**
+     * Enqueue a new event to be sent to split data collection services
+     *
+     * Example:
+     *      client.track(“account”, “Split Software”, “checkout”, Collections.singletonMap("age", 23))
+     *
+     * @param key the identifier of the entity
+     * @param trafficType the type of the event
+     * @param eventType the type of the event
+     * @param value the value of the event
+     *
+     * @return true if the track was successful, false otherwise
+     */
+    boolean track(String key, String trafficType, String eventType, Map<String, Object> properties);
+
+    /**
+     * Enqueue a new event to be sent to split data collection services
+     *
+     * Example:
+     *      client.track(“account”, “Split Software”, “checkout”, 123, Collections.singletonMap("age", 23))
+     *
+     * @param key the identifier of the entity
+     * @param trafficType the type of the event
+     * @param eventType the type of the event
+     * @param value the value of the event
+     *
+     * @return true if the track was successful, false otherwise
+     */
+    boolean track(String key, String trafficType, String eventType, double value, Map<String, Object> properties);
+
+
+    /**
+     * The SDK kicks off background threads to download data necessary
+     * for using the SDK. You can choose to block until the SDK has
+     * downloaded split definitions so that you will not get
+     * the 'control' treatment.
+     * <p>
+     *
+     * If the download is not successful in the time period set on
+     * {@link SplitClientConfig.Builder#setBlockUntilReadyTimeout}, a TimeoutException will be thrown.
+     * <p>
+     */
+    void blockUntilReady() throws TimeoutException, InterruptedException;
 }

@@ -71,6 +71,8 @@ public class RefreshableSegment implements Runnable, Segment {
     @Override
     public void run() {
         try {
+            // Do this again in case the previous call errored out.
+            _gates.registerSegment(_segmentName);
             while (true) {
                 long start = _changeNumber.get();
                 runWithoutExceptionHandling();

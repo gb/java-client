@@ -1,5 +1,7 @@
 package io.split.client;
 
+import com.google.common.collect.ConcurrentHashMultiset;
+import com.google.common.collect.Multiset;
 import io.split.client.impressions.AsynchronousImpressionListener;
 import io.split.client.impressions.ImpressionListener;
 import io.split.client.impressions.ImpressionsManager;
@@ -15,10 +17,12 @@ import io.split.engine.experiments.SplitChangeFetcher;
 import io.split.engine.experiments.SplitParser;
 import io.split.engine.segments.RefreshableSegmentFetcher;
 import io.split.engine.segments.SegmentChangeFetcher;
+import io.split.integrations.IntegrationsConfig;
 import org.apache.http.auth.AuthScope;
 import org.apache.http.auth.Credentials;
 import org.apache.http.auth.UsernamePasswordCredentials;
 import org.apache.http.client.CredentialsProvider;
+import org.apache.http.client.config.CookieSpecs;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.config.Registry;
 import org.apache.http.config.RegistryBuilder;
@@ -45,19 +49,21 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 public class SplitFactoryImpl implements SplitFactory {
     private static final Logger _log = LoggerFactory.getLogger(SplitFactory.class);
 
+    private static final Multiset<String> USED_API_TOKENS = ConcurrentHashMultiset.create();
     private static Random RANDOM = new Random();
 
     private final SplitClient _client;
     private final SplitManager _manager;
     private final Runnable destroyer;
+    private final String _apiToken;
     private boolean isTerminated = false;
 
-    public SplitFactoryImpl(String apiToken, SplitClientConfig config) throws IOException, InterruptedException, TimeoutException, URISyntaxException {
+    public SplitFactoryImpl(String apiToken, SplitClientConfig config) throws URISyntaxException {
+        _apiToken = apiToken;
         SSLContext sslContext = null;
         try {
             sslContext = SSLContexts.custom()
@@ -81,6 +87,7 @@ public class SplitFactoryImpl implements SplitFactory {
         RequestConfig requestConfig = RequestConfig.custom()
                 .setConnectTimeout(config.connectionTimeout())
                 .setSocketTimeout(config.readTimeout())
+                .setCookieSpec(CookieSpecs.STANDARD)
                 .build();
 
         PoolingHttpClientConnectionManager cm = new PoolingHttpClientConnectionManager(registry);
@@ -91,17 +98,38 @@ public class SplitFactoryImpl implements SplitFactory {
                 .setConnectionManager(cm)
                 .setDefaultRequestConfig(requestConfig)
                 .setSSLSocketFactory(sslsf)
-                .addInterceptorLast(AddSplitHeadersFilter.instance(apiToken))
+                .addInterceptorLast(AddSplitHeadersFilter.instance(apiToken, config.ipAddressEnabled()))
                 .addInterceptorLast(new GzipEncoderRequestInterceptor())
                 .addInterceptorLast(new GzipDecoderResponseInterceptor());
 
+
+        if (USED_API_TOKENS.contains(apiToken)) {
+            String message = String.format("factory instantiation: You already have %s with this API Key. " +
+                    "We recommend keeping only one instance of the factory at all times (Singleton pattern) and reusing " +
+                    "it throughout your application.",
+                    USED_API_TOKENS.count(apiToken) == 1 ? "1 factory" : String.format("%s factories", USED_API_TOKENS.count(apiToken)));
+            _log.warn(message);
+        } else if (!USED_API_TOKENS.isEmpty()) {
+            String message = "factory instantiation: You already have an instance of the Split factory. " +
+                    "Make sure you definitely want this additional instance. We recommend keeping only one instance of " +
+                    "the factory at all times (Singleton pattern) and reusing it throughout your application.“";
+            _log.warn(message);
+        }
+        USED_API_TOKENS.add(apiToken);
+
+        if (config.blockUntilReady() == -1) {
+            //BlockUntilReady not been set
+            _log.warn("no setBlockUntilReadyTimeout parameter has been set - incorrect control treatments could be logged” " +
+                    "if no ready config has been set when building factory");
+
+        }
         // Set up proxy is it exists
         if (config.proxy() != null) {
             _log.info("Initializing Split SDK with proxy settings");
             DefaultProxyRoutePlanner routePlanner = new DefaultProxyRoutePlanner(config.proxy());
             httpClientbuilder.setRoutePlanner(routePlanner);
 
-            if (config.proxyUsername() != null && config.proxyPassword() != null){
+            if (config.proxyUsername() != null && config.proxyPassword() != null) {
                 _log.debug("Proxy setup using credentials");
                 CredentialsProvider credsProvider = new BasicCredentialsProvider();
                 AuthScope siteScope = new AuthScope(config.proxy().getHostName(), config.proxy().getPort());
@@ -140,13 +168,37 @@ public class SplitFactoryImpl implements SplitFactory {
 
         // Impressions
         final ImpressionsManager splitImpressionListener = ImpressionsManager.instance(httpclient, config);
-        final ImpressionListener impressionListener;
 
-        if (config.impressionListener() != null) {
-            AsynchronousImpressionListener wrapper = AsynchronousImpressionListener.build(config.impressionListener(), config.impressionListenerCapactity());
-            List<ImpressionListener> impressionListeners = new ArrayList<ImpressionListener>();
-            impressionListeners.add(splitImpressionListener);
-            impressionListeners.add(wrapper);
+        List<ImpressionListener> impressionListeners = new ArrayList<>();
+        impressionListeners.add(splitImpressionListener);
+
+        // Setup integrations
+        if (config.integrationsConfig() != null) {
+
+            // asynchronous impressions listeners
+            List<IntegrationsConfig.ImpressionListenerWithMeta> asyncListeners = config
+                    .integrationsConfig()
+                    .getImpressionsListeners(IntegrationsConfig.Execution.ASYNC);
+
+            for (IntegrationsConfig.ImpressionListenerWithMeta listener : asyncListeners) {
+                AsynchronousImpressionListener wrapper = AsynchronousImpressionListener
+                        .build(listener.listener(), listener.queueSize());
+                impressionListeners.add(wrapper);
+            }
+
+            // synchronous impressions listeners
+            List<IntegrationsConfig.ImpressionListenerWithMeta> syncListeners = config
+                    .integrationsConfig()
+                    .getImpressionsListeners(IntegrationsConfig.Execution.SYNC);
+            for (IntegrationsConfig.ImpressionListenerWithMeta listener: syncListeners) {
+                impressionListeners.add(listener.listener());
+
+            }
+        }
+
+        final ImpressionListener impressionListener;
+        if (impressionListeners.size() > 1) {
+            // since there are more than just the default integration, let's federate and add them all.
             impressionListener = new ImpressionListener.FederatedImpressionListener(impressionListeners);
         } else {
             impressionListener = splitImpressionListener;
@@ -181,23 +233,24 @@ public class SplitFactoryImpl implements SplitFactory {
             }
         };
 
-        Runtime.getRuntime().addShutdownHook(new Thread() {
-            @Override
-            public void run() {
-                // Using the full path to avoid conflicting with Thread.destroy()
-                SplitFactoryImpl.this.destroy();
-            }
-        });
-
-        _client = new SplitClientImpl(this, splitFetcherProvider.getFetcher(), impressionListener, cachedFireAndForgetMetrics, eventClient, config);
-        _manager = new SplitManagerImpl(splitFetcherProvider.getFetcher());
-
-        if (config.blockUntilReady() > 0) {
-            if (!gates.isSDKReady(config.blockUntilReady())) {
-                throw new TimeoutException("SDK was not ready in " + config.blockUntilReady() + " milliseconds");
-            }
+        if (config.destroyOnShutDown()) {
+            Runtime.getRuntime().addShutdownHook(new Thread() {
+                @Override
+                public void run() {
+                    // Using the full path to avoid conflicting with Thread.destroy()
+                    SplitFactoryImpl.this.destroy();
+                }
+            });
         }
 
+        _client = new SplitClientImpl(this,
+                splitFetcherProvider.getFetcher(),
+                impressionListener,
+                cachedFireAndForgetMetrics,
+                eventClient,
+                config,
+                gates);
+        _manager = new SplitManagerImpl(splitFetcherProvider.getFetcher(), config, gates);
     }
 
     private static int findPollingPeriod(Random rand, int max) {
@@ -217,8 +270,14 @@ public class SplitFactoryImpl implements SplitFactory {
         synchronized (SplitFactoryImpl.class) {
             if (!isTerminated) {
                 destroyer.run();
+                USED_API_TOKENS.remove(_apiToken);
                 isTerminated = true;
             }
         }
+    }
+
+    @Override
+    public boolean isDestroyed() {
+        return isTerminated;
     }
 }

@@ -2,6 +2,7 @@ package io.split.client;
 
 
 import io.split.client.impressions.ImpressionListener;
+import io.split.integrations.IntegrationsConfig;
 import org.apache.http.HttpHost;
 
 import java.io.IOException;
@@ -13,6 +14,8 @@ import java.util.Properties;
  * @author adil
  */
 public class SplitClientConfig {
+
+    public static final String LOCALHOST_DEFAULT_FILE = "split.yaml";
 
     private final String _endpoint;
     private final String _eventsEndpoint;
@@ -27,12 +30,15 @@ public class SplitClientConfig {
     private final int _numThreadsForSegmentFetch;
     private final boolean _debugEnabled;
     private final boolean _labelsEnabled;
+    private final boolean _ipAddressEnabled;
     private final int _ready;
-    private final ImpressionListener _impressionListener;
-    private final int _impressionListenerCapacity;
     private final int _waitBeforeShutdown;
     private final int _eventsQueueSize;
     private final long _eventFlushIntervalInMillis;
+    private final int _maxStringLength;
+    private final boolean _destroyOnShutDown;
+    private final String _splitFile;
+    private final IntegrationsConfig _integrationsConfig;
 
     // Proxy configs
     private final HttpHost _proxy;
@@ -60,14 +66,17 @@ public class SplitClientConfig {
                               int ready,
                               boolean debugEnabled,
                               boolean labelsEnabled,
-                              ImpressionListener impressionListener,
-                              int impressionListenerCapacity,
+                              boolean ipAddressEnabled,
                               int waitBeforeShutdown,
                               HttpHost proxy,
                               String proxyUsername,
                               String proxyPassword,
                               int eventsQueueSize,
-                              long eventFlushIntervalInMillis) {
+                              long eventFlushIntervalInMillis,
+                              int maxStringLength,
+                              boolean destroyOnShutDown,
+                              String splitFile,
+                              IntegrationsConfig integrationsConfig) {
         _endpoint = endpoint;
         _eventsEndpoint = eventsEndpoint;
         _featuresRefreshRate = pollForFeatureChangesEveryNSeconds;
@@ -81,18 +90,21 @@ public class SplitClientConfig {
         _ready = ready;
         _debugEnabled = debugEnabled;
         _labelsEnabled = labelsEnabled;
-        _impressionListener = impressionListener;
-        _impressionListenerCapacity = impressionListenerCapacity;
+        _ipAddressEnabled = ipAddressEnabled;
         _waitBeforeShutdown = waitBeforeShutdown;
         _proxy = proxy;
         _proxyUsername = proxyUsername;
         _proxyPassword = proxyPassword;
         _eventsQueueSize = eventsQueueSize;
         _eventFlushIntervalInMillis = eventFlushIntervalInMillis;
+        _maxStringLength = maxStringLength;
+        _destroyOnShutDown = destroyOnShutDown;
+        _splitFile = splitFile;
+        _integrationsConfig = integrationsConfig;
 
         Properties props = new Properties();
         try {
-            props.load(this.getClass().getClassLoader().getResourceAsStream("version.properties"));
+            props.load(this.getClass().getClassLoader().getResourceAsStream("splitversion.properties"));
         } catch (IOException e) {
             throw new IllegalStateException("cannot find client version in classpath", e);
         }
@@ -149,16 +161,10 @@ public class SplitClientConfig {
 
     public boolean labelsEnabled() { return _labelsEnabled;}
 
+    public boolean ipAddressEnabled() { return _ipAddressEnabled; }
+
     public int blockUntilReady() {
         return _ready;
-    }
-
-    public ImpressionListener impressionListener() {
-        return _impressionListener;
-    }
-
-    public int impressionListenerCapactity() {
-        return _impressionListenerCapacity;
     }
 
     public int waitBeforeShutdown() {
@@ -185,13 +191,29 @@ public class SplitClientConfig {
         return _eventsQueueSize;
     }
 
+    public int maxStringLength() {
+        return _maxStringLength;
+    }
+
+    public boolean destroyOnShutDown() {
+        return _destroyOnShutDown;
+    }
+
+    public String splitFile() {
+        return _splitFile;
+    }
+
+    public IntegrationsConfig integrationsConfig() {
+        return _integrationsConfig;
+    }
+
     public static final class Builder {
 
         private String _endpoint = "https://sdk.split.io";
         private boolean _endpointSet = false;
         private String _eventsEndpoint = "https://events.split.io";
         private boolean _eventsEndpointSet = false;
-        private int _featuresRefreshRate = 60;
+        private int _featuresRefreshRate = 5;
         private int _segmentsRefreshRate = 60;
         private int _impressionsRefreshRate = 30;
         private int _impressionsQueueSize = 30000;
@@ -202,8 +224,7 @@ public class SplitClientConfig {
         private int _ready = -1; // -1 means no blocking
         private int _metricsRefreshRate = 60;
         private boolean _labelsEnabled = true;
-        private ImpressionListener _impressionListener;
-        private int _impressionListenerCapacity;
+        private  boolean _ipAddressEnabled = true;
         private int _waitBeforeShutdown = 5000;
         private String _proxyHost = "localhost";
         private int _proxyPort = -1;
@@ -211,8 +232,29 @@ public class SplitClientConfig {
         private String _proxyPassword;
         private int _eventsQueueSize = 500;
         private long _eventFlushIntervalInMillis = 30 * 1000;
+        private int _maxStringLength = 250;
+        private boolean _destroyOnShutDown = true;
+        private String _splitFile = null;
+        private IntegrationsConfig _integrationsConfig = null;
 
         public Builder() {
+        }
+
+        /**
+         * The amount of threads used for the thread pool that fetches segments.
+         * Usually and for most cases 2 is more than enough. But for organization
+         * that have a lot of segments, increasing this value can help expedite the
+         * time to ready.
+         * <p/>
+         *
+         * This is an ADVANCED parameter.
+         *
+         * @param numThreadsForSegmentFetch MUST be > 0. Default is 2.
+         * @return this builder
+         */
+        public Builder numThreadsForSegmentFetch(int numThreadsForSegmentFetch) {
+            _numThreadsForSegmentFetch = numThreadsForSegmentFetch;
+            return this;
         }
 
         /**
@@ -306,7 +348,7 @@ public class SplitClientConfig {
          *
          * If the value chosen is too small and more than the default size(5000) of impressions
          * are generated, the old ones will be dropped and the sdk will show a warning.
-         * <p/>
+         * <p>
          *
          * This is an ADVANCED parameter.
          *
@@ -319,6 +361,9 @@ public class SplitClientConfig {
         }
 
         /**
+         *
+         * @deprecated  As of release 3.2.5, replaced by {@link #integrationsConfig()} }
+         *
          * You can provide your own ImpressionListener to capture all impressions
          * generated by SplitClient. An Impression is generated each time getTreatment is called.
          * <p>
@@ -342,9 +387,15 @@ public class SplitClientConfig {
          *                 slow, the queue will fill up and any subsequent impressions will be dropped.
          * @return this builder
          */
+        @Deprecated
         public Builder impressionListener(ImpressionListener impressionListener, int queueSize) {
-            _impressionListener = impressionListener;
-            _impressionListenerCapacity = queueSize;
+            if (null == _integrationsConfig) {
+                _integrationsConfig = new IntegrationsConfig.Builder()
+                        .impressionsListener(impressionListener, queueSize)
+                        .build();
+            } else {
+                _integrationsConfig.addStandardImpressionListener(impressionListener, queueSize);
+            }
             return this;
         }
 
@@ -399,30 +450,28 @@ public class SplitClientConfig {
             return this;
         }
 
+        public Builder disableIPAddress() {
+            _ipAddressEnabled = false;
+            return this;
+        }
 
         /**
          * The SDK kicks off background threads to download data necessary
          * for using the SDK. You can choose to block until the SDK has
          * downloaded split definitions so that you will not get
          * the 'control' treatment.
-         * <p/>
-         * <p/>
+         * <p>
+         * <p>
          * If this parameter is set to a non-negative value, the SDK
-         * will block for that number of milliseconds for the data to be downloaded.
+         * will block for that number of milliseconds for the data to be downloaded when
+         * {@link SplitClient#blockUntilReady()} or {@link SplitManager#blockUntilReady()}
+         * is called
          * <p/>
-         * <p/>
-         * If the download is not successful in this time period, a TimeOutException
-         * will be thrown.
-         * <p/>
-         * <p/>
-         * A negative value implies that the SDK building MUST NOT block. In this
-         * scenario, the SDK might return the 'control' treatment until the
-         * desired data has been downloaded.
          *
          * @param milliseconds MUST BE greater than or equal to 0;
          * @return this builder
          */
-        public Builder ready(int milliseconds) {
+        public Builder setBlockUntilReadyTimeout(int milliseconds) {
             _ready = milliseconds;
             return this;
         }
@@ -483,6 +532,16 @@ public class SplitClientConfig {
             return this;
         }
 
+        /**
+         * Disables running destroy() on shutdown by default.
+         *
+         * @return this builder
+         */
+        public Builder disableDestroyOnShutDown() {
+            _destroyOnShutDown = false;
+            return this;
+        }
+
         HttpHost proxy() {
             if (_proxyPort != -1) {
                 return new HttpHost(_proxyHost, _proxyPort);
@@ -491,18 +550,44 @@ public class SplitClientConfig {
             return null;
         }
 
+        /**
+         * Set the location of the new yaml file for localhost mode defaulting to .split (legacy and deprecated format)
+         * This setting is optional.
+         *
+         * @param splitFile location
+         * @return this builder
+         */
+        public Builder splitFile(String splitFile) {
+            _splitFile = splitFile;
+            return this;
+        }
+
+        /**
+         * Sets up integrations for the Split SDK (Currently Impressions outgoing integrations supported only).
+         * @param config
+         * @return
+         */
+        public Builder integrations(IntegrationsConfig config) {
+            _integrationsConfig = config;
+            return this;
+        }
+
 
         public SplitClientConfig build() {
-            if (_featuresRefreshRate < 30 ) {
-                throw new IllegalArgumentException("featuresRefreshRate must be >= 30: " + _featuresRefreshRate);
+            if (_featuresRefreshRate < 5 ) {
+                throw new IllegalArgumentException("featuresRefreshRate must be >= 5: " + _featuresRefreshRate);
             }
 
             if (_segmentsRefreshRate < 30) {
                 throw new IllegalArgumentException("segmentsRefreshRate must be >= 30: " + _segmentsRefreshRate);
             }
 
-            if (_impressionsRefreshRate < 30) {
-                throw new IllegalArgumentException("impressionsRefreshRate must be >= 30: " + _impressionsRefreshRate);
+            if (_impressionsRefreshRate <= 0) {
+                throw new IllegalArgumentException("impressionsRefreshRate must be > 0: " + _impressionsRefreshRate);
+            }
+
+            if (_eventFlushIntervalInMillis < 1000) {
+                throw new IllegalArgumentException("_eventFlushIntervalInMillis must be >= 1000: " + _eventFlushIntervalInMillis);
             }
 
             if (_metricsRefreshRate < 30) {
@@ -537,13 +622,6 @@ public class SplitClientConfig {
                 throw new IllegalArgumentException("Number of threads for fetching segments MUST be greater than zero");
             }
 
-
-            if (_impressionListener != null) {
-                if (_impressionListenerCapacity <= 0) {
-                    throw new IllegalArgumentException("An ImpressionListener was provided, but its capacity was non-positive: " + _impressionListenerCapacity);
-                }
-            }
-
             return new SplitClientConfig(
                     _endpoint,
                     _eventsEndpoint,
@@ -558,14 +636,17 @@ public class SplitClientConfig {
                     _ready,
                     _debugEnabled,
                     _labelsEnabled,
-                    _impressionListener,
-                    _impressionListenerCapacity,
+                    _ipAddressEnabled,
                     _waitBeforeShutdown,
                     proxy(),
                     _proxyUsername,
                     _proxyPassword,
                     _eventsQueueSize,
-                    _eventFlushIntervalInMillis);
+                    _eventFlushIntervalInMillis,
+                    _maxStringLength,
+                    _destroyOnShutDown,
+                    _splitFile,
+                    _integrationsConfig);
         }
 
     }

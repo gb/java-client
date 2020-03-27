@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeoutException;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
@@ -22,28 +23,28 @@ import static com.google.common.base.Preconditions.checkNotNull;
  */
 public final class LocalhostSplitManager implements SplitManager {
 
-    private Map<SplitAndKey, String> _splitAndKeyToTreatmentMap;
+    private Map<SplitAndKey, LocalhostSplit> _splitAndKeyToTreatmentMap;
     private Map<String, Set<String>> _splitToTreatmentsMap;
 
-    public static LocalhostSplitManager of(Map<SplitAndKey, String> featureToTreatmentMap) {
+    public static LocalhostSplitManager of(Map<SplitAndKey, LocalhostSplit> featureToTreatmentMap) {
         checkNotNull(featureToTreatmentMap, "featureToTreatmentMap must not be null");
         return new LocalhostSplitManager(featureToTreatmentMap, splitsToTreatments(featureToTreatmentMap));
     }
 
-    private static Map<String, Set<String>> splitsToTreatments(Map<SplitAndKey, String> splitAndKeyStringMap) {
+    private static Map<String, Set<String>> splitsToTreatments(Map<SplitAndKey, LocalhostSplit> splitAndKeyStringMap) {
         Map<String, Set<String>> splitsToTreatments = Maps.newHashMap();
-        for (Map.Entry<SplitAndKey, String> entry : splitAndKeyStringMap.entrySet()) {
+        for (Map.Entry<SplitAndKey, LocalhostSplit> entry : splitAndKeyStringMap.entrySet()) {
             String split = entry.getKey().split();
             if (!splitsToTreatments.containsKey(split)) {
                 splitsToTreatments.put(split, Sets.<String>newHashSet());
             }
             Set<String> treatments = splitsToTreatments.get(split);
-            treatments.add(entry.getValue());
+            treatments.add(entry.getValue().treatment);
         }
         return splitsToTreatments;
     }
 
-    private LocalhostSplitManager(Map<SplitAndKey, String> featureToTreatmentMap,  Map<String, Set<String>> splitToTreatmentsMap) {
+    private LocalhostSplitManager(Map<SplitAndKey, LocalhostSplit> featureToTreatmentMap,  Map<String, Set<String>> splitToTreatmentsMap) {
         checkNotNull(featureToTreatmentMap, "featureToTreatmentMap must not be null");
         _splitAndKeyToTreatmentMap = featureToTreatmentMap;
         _splitToTreatmentsMap = splitToTreatmentsMap;
@@ -63,10 +64,15 @@ public final class LocalhostSplitManager implements SplitManager {
     @Override
     public List<String> splitNames() {
         Set<String> splits = Sets.newHashSet();
-        for (Map.Entry<SplitAndKey, String> entry : _splitAndKeyToTreatmentMap.entrySet()) {
+        for (Map.Entry<SplitAndKey, LocalhostSplit> entry : _splitAndKeyToTreatmentMap.entrySet()) {
             splits.add(entry.getKey().split());
         }
         return Lists.newArrayList(splits);
+    }
+
+    @Override
+    public void blockUntilReady() throws TimeoutException, InterruptedException {
+        // It is always ready
     }
 
     @Override
@@ -78,7 +84,7 @@ public final class LocalhostSplitManager implements SplitManager {
         return toSplitView(featureName, _splitToTreatmentsMap.get(featureName));
     }
 
-    void updateFeatureToTreatmentMap(Map<SplitAndKey, String> featureToTreatmentMap) {
+    void updateFeatureToTreatmentMap(Map<SplitAndKey, LocalhostSplit> featureToTreatmentMap) {
         checkNotNull(featureToTreatmentMap, "featureToTreatmentMap must not be null");
         _splitAndKeyToTreatmentMap = featureToTreatmentMap;
         _splitToTreatmentsMap = splitsToTreatments(_splitAndKeyToTreatmentMap);

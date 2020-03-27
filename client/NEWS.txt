@@ -1,4 +1,48 @@
 NEWS
+
+3.1.1
+- No news for this minor release
+
+3.1.0
+- Add getTreatmentWithConfig to Split client API to retrieve meta information associated to each treatment
+-  Localhost mode now support yaml and is the preferred file format. Default location of $user.home/.split file stills works but will be deprecated
+
+3.0.9
+- Validate split names on getTreatment and manager calls
+- Validate traffic type name when calling track.
+- Check for multiple factories instantiated
+
+3.0.8
+- Ability to disable automatic destroy() on graceful shutdowns.
+
+3.0.7
+- Removing unused thrown exceptions from build signature
+- Setting feature refresh rate to 5 seconds by default
+
+3.0.6
+- Setting CookieSpec to Standard
+
+3.0.5
+- Adding input validation for fast feedback of incorrect use of the client.
+
+3.0.4
+- Fix potential race condition when segment wait for readiness before they are registered to the readiness gates
+
+3.0.3
+- Expose param to increase thread pool size for segments
+
+3.0.2
+- Fixed traffic allocation issue on 1%.
+
+3.0.1
+- Fix Metric Counters when using Split Proxy.
+
+3.0.0
+- Moving block until ready out of the factory into the split client and manager client
+- Starting this version, SplitClientConfig#ready(int) is deprecated and migrated to a two part
+  implementation: set the desired value in SplitClientConfig#setBlockUntilReadyTimeout(int) and call
+  SplitClient#blockUntilReady() or SplitManager#blockUntilReady()
+
 2.3.2
 - Add support for handling different relative path in the endpoints of the Split Synchronizer
 

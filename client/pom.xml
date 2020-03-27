@@ -5,7 +5,7 @@
     <parent>
         <groupId>io.split.client</groupId>
         <artifactId>java-client-parent</artifactId>
-        <version>2.3.3-rc</version>
+        <version>3.3.2</version>
     </parent>
     <artifactId>java-client</artifactId>
     <packaging>jar</packaging>
@@ -46,6 +46,8 @@
                                     <include>org.apache.httpcomponents:httpclient</include>
                                     <include>org.apache.httpcomponents:httpcore</include>
                                     <include>com.google.code.gson:gson</include>
+                                    <include>com.google.guava:guava</include>
+                                    <include>org.yaml.snakeyaml</include>
                                 </includes>
                             </artifactSet>
                             <relocations>
@@ -54,8 +56,8 @@
                                     <shadedPattern>split.org.apache.http</shadedPattern>
                                 </relocation>
                                 <relocation>
-                                    <pattern>com.google.gson</pattern>
-                                    <shadedPattern>split.com.google.gson</shadedPattern>
+                                    <pattern>com.google</pattern>
+                                    <shadedPattern>split.com.google</shadedPattern>
                                 </relocation>
                             </relocations>
                             <filters>
@@ -103,7 +105,7 @@
             </plugin>
         </plugins>
         <filters>
-            <filter>src/main/resources/version.properties</filter>
+            <filter>src/main/resources/splitversion.properties</filter>
         </filters>
         <resources>
             <resource>
@@ -132,6 +134,11 @@
             <artifactId>gson</artifactId>
             <version>2.6.2</version>
         </dependency>
+        <dependency>
+            <groupId>org.yaml</groupId>
+            <artifactId>snakeyaml</artifactId>
+            <version>1.21</version>
+        </dependency>
         <!-- Test deps -->
         <dependency>
             <groupId>org.apache.commons</groupId>
@@ -154,6 +161,12 @@
             <groupId>org.mockito</groupId>
             <artifactId>mockito-core</artifactId>
             <version>1.10.19</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-log4j12</artifactId>
+            <version>1.7.21</version>
             <scope>test</scope>
         </dependency>
     </dependencies>

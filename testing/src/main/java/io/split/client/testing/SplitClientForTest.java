@@ -2,10 +2,12 @@ package io.split.client.testing;
 
 import io.split.client.SplitClient;
 import io.split.client.api.Key;
+import io.split.client.api.SplitResult;
 import io.split.grammar.Treatments;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.TimeoutException;
 
 public class SplitClientForTest implements SplitClient {
     private Map<String, String> _tests;
@@ -33,17 +35,40 @@ public class SplitClientForTest implements SplitClient {
     public String getTreatment(String key, String split) {
         return _tests.containsKey(split)
                 ? _tests.get(split)
-                : "control";
+                : Treatments.CONTROL;
     }
 
     public String getTreatment(String key, String split, Map<String, Object> attributes) {
-        return this.getTreatment(key, split);
+        return _tests.containsKey(split)
+                ? _tests.get(split)
+                : Treatments.CONTROL;
     }
 
     public String getTreatment(Key key, String split, Map<String, Object> attributes) {
         return _tests.containsKey(split)
                 ? _tests.get(split)
                 : Treatments.CONTROL;
+    }
+
+    @Override
+    public SplitResult getTreatmentWithConfig(String key, String split) {
+        return new SplitResult(_tests.containsKey(split)
+                ? _tests.get(split)
+                : Treatments.CONTROL, null);
+    }
+
+    @Override
+    public SplitResult getTreatmentWithConfig(String key, String split, Map<String, Object> attributes) {
+        return new SplitResult(_tests.containsKey(split)
+                ? _tests.get(split)
+                : Treatments.CONTROL, null);
+    }
+
+    @Override
+    public SplitResult getTreatmentWithConfig(Key key, String split, Map<String, Object> attributes) {
+        return new SplitResult(_tests.containsKey(split)
+                ? _tests.get(split)
+                : Treatments.CONTROL, null);
     }
 
     @Override
@@ -59,5 +84,20 @@ public class SplitClientForTest implements SplitClient {
     @Override
     public boolean track(String key, String trafficType, String eventType, double value) {
         return false;
+    }
+
+    @Override
+    public boolean track(String key, String trafficType, String eventType, Map<String, Object> properties) {
+        return false;
+    }
+
+    @Override
+    public boolean track(String key, String trafficType, String eventType, double value, Map<String, Object> properties) {
+        return false;
+    }
+
+    @Override
+    public void blockUntilReady() throws TimeoutException, InterruptedException {
+
     }
 }
