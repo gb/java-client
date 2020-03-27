@@ -1,6 +1,7 @@
 package io.split.engine.matchers;
 
 import io.split.client.SplitClientImpl;
+import io.split.client.exceptions.UnknownAttributeException;
 
 import java.util.Map;
 import java.util.Objects;
@@ -30,6 +31,10 @@ public final class AttributeMatcher {
     public boolean match(String key, String bucketingKey, Map<String, Object> attributes, SplitClientImpl splitClient) {
         if (_attribute == null) {
             return _matcher.match(key, bucketingKey, attributes, splitClient);
+        }
+
+        if(flag && (attributes == null || !attributes.containsKey(_attribute))) {
+            throw new UnknownAttributeException(_attribute);
         }
 
         if (attributes == null) {

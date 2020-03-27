@@ -5,6 +5,7 @@ import io.split.client.api.Key;
 import io.split.client.dtos.ConditionType;
 import io.split.client.dtos.Event;
 import io.split.client.exceptions.ChangeNumberExceptionWrapper;
+import io.split.client.exceptions.UnknownAttributeException;
 import io.split.client.impressions.Impression;
 import io.split.client.impressions.ImpressionListener;
 import io.split.engine.experiments.ParsedCondition;
@@ -174,7 +175,7 @@ public final class SplitClientImpl implements SplitClient {
      * @return
      * @throws ChangeNumberExceptionWrapper
      */
-    private TreatmentLabelAndChangeNumber getTreatment(String matchingKey, String bucketingKey, ParsedSplit parsedSplit, Map<String, Object> attributes) throws ChangeNumberExceptionWrapper {
+    public static TreatmentLabelAndChangeNumber getTreatment(String matchingKey, String bucketingKey, ParsedSplit parsedSplit, Map<String, Object> attributes) throws ChangeNumberExceptionWrapper {
         try {
             if (parsedSplit.killed()) {
                 return new TreatmentLabelAndChangeNumber(parsedSplit.defaultTreatment(), KILLED, parsedSplit.changeNumber());
@@ -207,9 +208,13 @@ public final class SplitClientImpl implements SplitClient {
                     inRollout = true;
                 }
 
-                if (parsedCondition.matcher().match(matchingKey, bucketingKey, attributes, this)) {
-                    String treatment = Splitter.getTreatment(bk, parsedSplit.seed(), parsedCondition.partitions(), parsedSplit.algo());
-                    return new TreatmentLabelAndChangeNumber(treatment, parsedCondition.label(), parsedSplit.changeNumber());
+                try {
+                    if (parsedCondition.matcher().match(matchingKey, bucketingKey, attributes, this)) {
+                        String treatment = Splitter.getTreatment(bk, parsedSplit.seed(), parsedCondition.partitions(), parsedSplit.algo());
+                        return new TreatmentLabelAndChangeNumber(treatment, parsedCondition.label(), parsedSplit.changeNumber());
+                    }
+                } catch (UnknownAttributeException e) {
+                    return new TreatmentLabelAndChangeNumber("UNKNOWN_ATTRIBUTE", parsedCondition.label(), parsedSplit.changeNumber());
                 }
             }
 

@@ -1,6 +1,7 @@
 package io.split.engine.matchers;
 
 import io.split.client.SplitClientImpl;
+import io.split.engine.experiments.ParsedSplit;
 
 import java.util.List;
 import java.util.Map;
@@ -18,7 +19,7 @@ public class DependencyMatcher implements Matcher {
     }
 
     @Override
-    public boolean match(Object matchValue, String bucketingKey, Map<String, Object> attributes, SplitClientImpl splitClient) {
+    public boolean match(Object matchValue, String bucketingKey, Map<String, Object> attributes, Map<String, ParsedSplit> splits) {
         if (matchValue == null) {
             return false;
         }
@@ -27,10 +28,10 @@ public class DependencyMatcher implements Matcher {
             return false;
         }
 
-        String result = splitClient.getTreatmentWithoutImpressions(
+        String result = SplitClientImpl.getTreatment(
                 (String) matchValue,
                 bucketingKey,
-                _split,
+                splits.get(_split),
                 attributes
         );
 

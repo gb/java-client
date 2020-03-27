@@ -56,6 +56,12 @@ public class HashConsistencyTest {
         validateFileGuavaMurmur3Hash(file);
     }
 
+    @Test
+    public void testBucket() {
+        long hash = Splitter.murmur_hash("false", -1360959913);
+        System.out.print(hash);
+    }
+
     private void validateFileLegacyHash(File file) throws IOException {
         BufferedReader reader = new BufferedReader(new FileReader(file));
         reader.readLine(); // Header
