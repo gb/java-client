@@ -88,10 +88,10 @@ public class SplitSseEventSource {
                     }
                     break;
                 } else {
-                    _eventCallback.apply(_eventInput.read());
+                    InboundSseEvent event = _eventInput.read();
+                    _eventCallback.apply(event);
                 }
             }
-
         } catch (WebApplicationException wae) {
             _log.debug(String.format("Unable to connect. Reconnect: true. %s - %s", wae.getResponse(), wae.getMessage()));
             close(true);
@@ -100,7 +100,7 @@ public class SplitSseEventSource {
             close();
         } finally {
             _state.set(SseState.CLOSED);
-            Thread.currentThread().interrupt();
+            _log.debug("SSE connection finished.");
         }
     }
 
