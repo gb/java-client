@@ -1,6 +1,6 @@
 package io.split.engine.sse;
 
-import io.split.SSEMockServer;
+import io.split.SplitServersMock;
 import org.apache.http.client.utils.URIBuilder;
 import org.awaitility.Awaitility;
 import org.glassfish.grizzly.utils.Pair;
@@ -21,8 +21,8 @@ import java.util.concurrent.atomic.AtomicReference;
 public class SplitSseEventSourceTest {
     @Test
     public void openShouldConnect() throws IOException, URISyntaxException {
-        SSEMockServer.SseEventQueue eventQueue = new SSEMockServer.SseEventQueue();
-        SSEMockServer sseServer = buildSSEMockServer(eventQueue);
+        SplitServersMock.SseEventQueue eventQueue = new SplitServersMock.SseEventQueue();
+        SplitServersMock sseServer = buildSSEMockServer(eventQueue);
         sseServer.start();
 
         AtomicReference<InboundSseEvent> inboundSseEvent = new AtomicReference<>();
@@ -56,8 +56,8 @@ public class SplitSseEventSourceTest {
 
     @Test
     public void openShouldNotConnect() throws IOException, URISyntaxException {
-        SSEMockServer.SseEventQueue eventQueue = new SSEMockServer.SseEventQueue();
-        SSEMockServer sseServer = buildSSEMockServer(eventQueue);
+        SplitServersMock.SseEventQueue eventQueue = new SplitServersMock.SseEventQueue();
+        SplitServersMock sseServer = buildSSEMockServer(eventQueue);
 
         sseServer.start();
 
@@ -86,8 +86,8 @@ public class SplitSseEventSourceTest {
 
     @Test
     public void closeShouldCloseConnection() throws IOException, URISyntaxException {
-        SSEMockServer.SseEventQueue eventQueue = new SSEMockServer.SseEventQueue();
-        SSEMockServer sseServer = buildSSEMockServer(eventQueue);
+        SplitServersMock.SseEventQueue eventQueue = new SplitServersMock.SseEventQueue();
+        SplitServersMock sseServer = buildSSEMockServer(eventQueue);
 
         sseServer.start();
 
@@ -123,8 +123,8 @@ public class SplitSseEventSourceTest {
 
     @Test
     public void openShouldReceiveNotification() throws IOException, URISyntaxException {
-        SSEMockServer.SseEventQueue eventQueue = new SSEMockServer.SseEventQueue();
-        SSEMockServer sseServer = buildSSEMockServer(eventQueue);
+        SplitServersMock.SseEventQueue eventQueue = new SplitServersMock.SseEventQueue();
+        SplitServersMock sseServer = buildSSEMockServer(eventQueue);
 
         sseServer.start();
 
@@ -166,8 +166,8 @@ public class SplitSseEventSourceTest {
         sseServer.stop();
     }
 
-    private SSEMockServer buildSSEMockServer(SSEMockServer.SseEventQueue eventQueue) {
-        return new SSEMockServer(eventQueue, (token, version, channel) -> {
+    private SplitServersMock buildSSEMockServer(SplitServersMock.SseEventQueue eventQueue) {
+        return new SplitServersMock(eventQueue, (token, version, channel) -> {
             if (!"1.1".equals(version)) {
                 return new Pair<>(new OutboundEvent.Builder().data("wrong version").build(), false);
             }

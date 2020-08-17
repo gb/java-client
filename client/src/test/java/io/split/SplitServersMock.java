@@ -1,6 +1,8 @@
 package io.split;
 
+import com.google.common.collect.ImmutableMap;
 import org.glassfish.grizzly.http.server.HttpServer;
+import org.glassfish.grizzly.http.server.Request;
 import org.glassfish.grizzly.utils.Pair;
 import org.glassfish.hk2.utilities.binding.AbstractBinder;
 import org.glassfish.jersey.grizzly2.httpserver.GrizzlyHttpServerFactory;
@@ -10,28 +12,33 @@ import org.jvnet.hk2.annotations.Service;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import javax.ws.rs.GET;
+import javax.ws.rs.POST;
 import javax.ws.rs.Path;
+import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.Context;
+import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.sse.OutboundSseEvent;
 import javax.ws.rs.sse.Sse;
 import javax.ws.rs.sse.SseEventSink;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.ServerSocket;
 import java.net.URI;
+import java.util.Scanner;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class SSEMockServer {
+public class SplitServersMock {
     private static final String BASE_URL = "http://localhost:%d";
     private final SseEventQueue _queue;
     private final Validator _validator;
     private final AtomicInteger _port = new AtomicInteger();
     private HttpServer _server;
 
-    public SSEMockServer(SseEventQueue queue, Validator validator) {
+    public SplitServersMock(SseEventQueue queue, Validator validator) {
         _queue = queue;
         _validator = validator;
     }
@@ -106,7 +113,7 @@ public class SSEMockServer {
                     return;
                 }
 
-                while(!eventSink.isClosed()) {
+                while (!eventSink.isClosed()) {
                     try {
                         OutboundSseEvent event = _eventsToSend.pull();
                         eventSink.send(event);
@@ -116,7 +123,101 @@ public class SSEMockServer {
                 }
             }).start();
         }
+
+        @GET
+        @Path("/api/auth/{status}")
+        public Response auth(@Context Request request, @PathParam("status") String status) {
+            switch (status) {
+                case "enabled":
+                    return Response
+                            .ok(readFileAsString("streaming-auth-push-enabled.json"))
+                            .type(MediaType.APPLICATION_JSON_TYPE)
+                            .build();
+                case "disabled":
+                    return Response
+                            .ok(readFileAsString("streaming-auth-push-disabled.json"))
+                            .type(MediaType.APPLICATION_JSON_TYPE)
+                            .build();
+                default:
+                    return Response.status(404).build();
+            }
+        }
+
+        private static final ImmutableMap<Long, String> splitChangesFiles = new ImmutableMap.Builder<Long, String>()
+                .put(-1L, readFileAsString("splits.json"))
+                .put(1585948850109L, "{\"splits\": [], \"since\":1585948850109, \"till\":1585948850110}")
+                .put(1585948850110L, readFileAsString("splits2.json"))
+                .put(1585948850111L, readFileAsString("splits_killed.json"))
+                .build();
+
+
+        @GET
+        @Path("/api/splitChanges")
+        public Response splitChanges(@Context Request request, @QueryParam("since") Long since) {
+            String body = splitChangesFiles.get(since);
+            if (null == body) {
+                return Response.status(400).build();
+            }
+            return Response.ok(body).type(MediaType.APPLICATION_JSON_TYPE).build();
+        }
+
+        @GET
+        @Path("/api/segmentChanges/{segmentName}")
+        public Response segmentChanges(@Context Request request, @PathParam("segmentName") String segmentName, @QueryParam("since") Long since) {
+            switch (segmentName) {
+                case "segment-test":
+                    return Response
+                            .ok("{\"name\": \"segment3\",\"added\": [],\"removed\": [],\"since\": -1,\"till\": -1}")
+                            .type(MediaType.APPLICATION_JSON_TYPE)
+                            .build();
+                case "segment3":
+                    if (since == -1L) {
+                        return Response.ok(readFileAsString("segment3.json")).type(MediaType.APPLICATION_JSON_TYPE).build();
+                    }
+                    return Response
+                            .ok("{\"name\": \"segment3\",\"added\": [],\"removed\": [],\"since\": 1585948850110,\"till\": 1585948850110}")
+                            .type(MediaType.APPLICATION_JSON_TYPE)
+                            .build();
+            }
+            return Response.status(404).build();
+        }
+
+        @POST
+        @Path("/api/metrics/time")
+        public Response timeMetric() { return Response.ok().build(); }
+
+        @POST
+        @Path("/api/metrics/times")
+        public Response timesMetric() { return Response.ok().build(); }
+
+        @POST
+        @Path("/api/metrics/counter")
+        public Response counterMetric() { return Response.ok().build(); }
+
+        @POST
+        @Path("/api/metrics/counters")
+        public Response countersMetric() { return Response.ok().build(); }
+
+        @POST
+        @Path("/api/testImpressions/bulk")
+        public Response impressions() { return Response.ok().build(); }
+
+        @POST
+        @Path("/api/events/bulk")
+        public Response events() { return Response.ok().build(); }
+
+        private static String readFileAsString(String fileName) {
+            InputStream inputStream = SplitServersMock.class.getClassLoader().getResourceAsStream(fileName);
+            assert inputStream != null;
+            Scanner sc = new Scanner(inputStream);
+            StringBuilder sb = new StringBuilder();
+            while(sc.hasNext()){
+                sb.append(sc.nextLine());
+            }
+            return sb.toString();
+        }
     }
+
 
     @Singleton
     @Service

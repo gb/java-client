@@ -1,6 +1,6 @@
 package io.split.engine.sse;
 
-import io.split.SSEMockServer;
+import io.split.SplitServersMock;
 import io.split.engine.sse.dtos.ErrorNotification;
 import io.split.engine.sse.dtos.SplitChangeNotification;
 import io.split.engine.sse.exceptions.EventParsingException;
@@ -32,8 +32,8 @@ public class EventSourceClientTest {
 
     @Test
     public void startShouldConnect() throws IOException {
-        SSEMockServer.SseEventQueue eventQueue = new SSEMockServer.SseEventQueue();
-        SSEMockServer sseServer = buildSSEMockServer(eventQueue);
+        SplitServersMock.SseEventQueue eventQueue = new SplitServersMock.SseEventQueue();
+        SplitServersMock sseServer = buildSSEMockServer(eventQueue);
         sseServer.start();
         Client client = ClientBuilder.newBuilder().readTimeout(70, TimeUnit.SECONDS).build();
 
@@ -48,8 +48,8 @@ public class EventSourceClientTest {
 
     @Test
     public void startShouldNotConnect() throws IOException, InterruptedException {
-        SSEMockServer.SseEventQueue eventQueue = new SSEMockServer.SseEventQueue();
-        SSEMockServer sseServer = buildSSEMockServer(eventQueue);
+        SplitServersMock.SseEventQueue eventQueue = new SplitServersMock.SseEventQueue();
+        SplitServersMock sseServer = buildSSEMockServer(eventQueue);
         sseServer.start();
         Client client = ClientBuilder.newBuilder().readTimeout(70, TimeUnit.SECONDS).build();
 
@@ -66,8 +66,8 @@ public class EventSourceClientTest {
 
     @Test
     public void startAndReceiveNotification() throws IOException, InterruptedException, EventParsingException {
-        SSEMockServer.SseEventQueue eventQueue = new SSEMockServer.SseEventQueue();
-        SSEMockServer sseServer = buildSSEMockServer(eventQueue);
+        SplitServersMock.SseEventQueue eventQueue = new SplitServersMock.SseEventQueue();
+        SplitServersMock sseServer = buildSSEMockServer(eventQueue);
         sseServer.start();
         Client client = ClientBuilder.newBuilder().readTimeout(70, TimeUnit.SECONDS).build();
 
@@ -110,8 +110,8 @@ public class EventSourceClientTest {
                 .untilAsserted(() -> Mockito.verify(_pushStatusTracker, Mockito.times(1)).handleIncomingAblyError(Mockito.any(ErrorNotification.class)));
     }
 
-    private SSEMockServer buildSSEMockServer(SSEMockServer.SseEventQueue eventQueue) {
-        return new SSEMockServer(eventQueue, (token, version, channel) -> {
+    private SplitServersMock buildSSEMockServer(SplitServersMock.SseEventQueue eventQueue) {
+        return new SplitServersMock(eventQueue, (token, version, channel) -> {
             if (!"1.1".equals(version)) {
                 return new Pair<>(new OutboundEvent.Builder().data("wrong version").build(), false);
             }

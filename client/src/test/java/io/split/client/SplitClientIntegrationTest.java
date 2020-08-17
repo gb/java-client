@@ -1,12 +1,12 @@
 package io.split.client;
 
-import io.split.SSEMockServer;
-import io.split.SplitMockServer;
+import io.split.SplitServersMock;
 import io.split.client.api.SplitView;
 import org.awaitility.Awaitility;
 import org.glassfish.grizzly.utils.Pair;
 import org.glassfish.jersey.media.sse.OutboundEvent;
 import org.junit.Assert;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import javax.ws.rs.sse.OutboundSseEvent;
@@ -17,22 +17,23 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 public class SplitClientIntegrationTest {
+
     @Test
     public void getTreatmentWithStreamingEnabled() throws IOException, TimeoutException, InterruptedException, URISyntaxException {
-        SplitMockServer splitServer = new SplitMockServer();
-        SSEMockServer.SseEventQueue eventQueue = new SSEMockServer.SseEventQueue();
-        SSEMockServer sseServer = buildSSEMockServer(eventQueue);
+        SplitServersMock.SseEventQueue eventQueue = new SplitServersMock.SseEventQueue();
+        SplitServersMock splitServer = buildSSEMockServer(eventQueue);
 
         splitServer.start();
-        sseServer.start();
+        final String URL = "http://localhost:" + splitServer.getPort();
 
         SplitClientConfig config = SplitClientConfig.builder()
                 .setBlockUntilReadyTimeout(10000)
-                .endpoint(splitServer.getUrl(), splitServer.getUrl())
-                .authServiceURL(String.format("%s/api/auth/enabled", splitServer.getUrl()))
-                .streamingServiceURL("http://localhost:" + sseServer.getPort())
+                .endpoint(URL, URL)
+                .authServiceURL(URL + "/api/auth/enabled")
+                .streamingServiceURL(URL)
                 .streamingEnabled(true)
                 .featuresRefreshRate(5)
+                .segmentsRefreshRate(30)
                 .build();
 
         SplitFactory factory = SplitFactoryBuilder.build("fake-api-token", config);
@@ -104,19 +105,24 @@ public class SplitClientIntegrationTest {
 
         client.destroy();
         splitServer.stop();
-        sseServer.stop();
     }
 
     @Test
     public void getTreatmentWithStreamingEnabledAndAuthDisabled() throws IOException, TimeoutException, InterruptedException, URISyntaxException {
-        SplitMockServer splitServer = new SplitMockServer();
+        SplitServersMock.SseEventQueue eventQueue = new SplitServersMock.SseEventQueue();
+        SplitServersMock splitServer = buildSSEMockServer(eventQueue);
+
         splitServer.start();
+        final String URL = "http://localhost:" + splitServer.getPort();
 
         SplitClientConfig config = SplitClientConfig.builder()
                 .setBlockUntilReadyTimeout(10000)
-                .endpoint(splitServer.getUrl(), splitServer.getUrl())
-                .authServiceURL(String.format("%s/api/auth/disabled", splitServer.getUrl()))
+                .endpoint(URL, URL)
+                .authServiceURL(URL + "/api/auth/disabled")
+                .streamingServiceURL(URL)
                 .streamingEnabled(true)
+                .featuresRefreshRate(5)
+                .segmentsRefreshRate(30)
                 .build();
 
         SplitFactory factory = SplitFactoryBuilder.build("fake-api-token", config);
@@ -132,15 +138,20 @@ public class SplitClientIntegrationTest {
 
     @Test
     public void getTreatmentWithStreamingDisabled() throws IOException, TimeoutException, InterruptedException, URISyntaxException {
-        SplitMockServer splitServer = new SplitMockServer();
+        SplitServersMock.SseEventQueue eventQueue = new SplitServersMock.SseEventQueue();
+        SplitServersMock splitServer = buildSSEMockServer(eventQueue);
+
         splitServer.start();
+        final String URL = "http://localhost:" + splitServer.getPort();
 
         SplitClientConfig config = SplitClientConfig.builder()
                 .setBlockUntilReadyTimeout(10000)
-                .endpoint(splitServer.getUrl(), splitServer.getUrl())
-                .authServiceURL(String.format("%s/api/auth/enabled", splitServer.getUrl()))
+                .endpoint(URL, URL)
+                .authServiceURL(URL + "/api/auth/enabled")
+                .streamingServiceURL(URL)
                 .streamingEnabled(false)
                 .featuresRefreshRate(5)
+                .segmentsRefreshRate(30)
                 .build();
 
         SplitFactory factory = SplitFactoryBuilder.build("fake-api-token", config);
@@ -160,14 +171,21 @@ public class SplitClientIntegrationTest {
 
     @Test
     public void managerSplitsWithStreamingEnabled() throws IOException, TimeoutException, InterruptedException, URISyntaxException {
-        SplitMockServer splitServer = new SplitMockServer();
-        SSEMockServer.SseEventQueue eventQueue = new SSEMockServer.SseEventQueue();
-        SSEMockServer sseServer = buildSSEMockServer(eventQueue);
+        SplitServersMock.SseEventQueue eventQueue = new SplitServersMock.SseEventQueue();
+        SplitServersMock splitServer = buildSSEMockServer(eventQueue);
 
         splitServer.start();
-        sseServer.start();
+        final String URL = "http://localhost:" + splitServer.getPort();
 
-        SplitClientConfig config = buildSplitClientConfig("enabled", splitServer.getUrl(), sseServer.getPort(), true, 50);
+        SplitClientConfig config = SplitClientConfig.builder()
+                .setBlockUntilReadyTimeout(10000)
+                .endpoint(URL, URL)
+                .authServiceURL(URL + "/api/auth/enabled")
+                .streamingServiceURL(URL)
+                .streamingEnabled(true)
+                .featuresRefreshRate(50)
+                .segmentsRefreshRate(30)
+                .build();
 
         SplitFactory factory = SplitFactoryBuilder.build("fake-api-token", config);
         SplitManager manager = factory.manager();
@@ -189,26 +207,26 @@ public class SplitClientIntegrationTest {
                 .atMost(2L, TimeUnit.MINUTES)
                 .until(() -> 2 == manager.splits().stream().filter(r -> !r.killed).toArray().length);
 
+        factory.client().destroy();
         splitServer.stop();
-        sseServer.stop();
     }
 
     @Test
     public void splitClientOccupancyNotifications() throws IOException, TimeoutException, InterruptedException, URISyntaxException {
-        SplitMockServer splitServer = new SplitMockServer();
-        SSEMockServer.SseEventQueue eventQueue = new SSEMockServer.SseEventQueue();
-        SSEMockServer sseServer = buildSSEMockServer(eventQueue);
+        SplitServersMock.SseEventQueue eventQueue = new SplitServersMock.SseEventQueue();
+        SplitServersMock splitServer = buildSSEMockServer(eventQueue);
 
         splitServer.start();
-        sseServer.start();
+        final String URL = "http://localhost:" + splitServer.getPort();
 
         SplitClientConfig config = SplitClientConfig.builder()
                 .setBlockUntilReadyTimeout(10000)
-                .endpoint(splitServer.getUrl(), splitServer.getUrl())
-                .authServiceURL(String.format("%s/api/auth/enabled", splitServer.getUrl()))
-                .streamingServiceURL("http://localhost:" + sseServer.getPort())
-                .featuresRefreshRate(20)
+                .endpoint(URL, URL)
+                .authServiceURL(URL + "/api/auth/enabled")
+                .streamingServiceURL(URL)
                 .streamingEnabled(true)
+                .featuresRefreshRate(20)
+                .segmentsRefreshRate(30)
                 .build();
 
         SplitFactory factory = SplitFactoryBuilder.build("fake-api-token", config);
@@ -252,25 +270,24 @@ public class SplitClientIntegrationTest {
 
         client.destroy();
         splitServer.stop();
-        sseServer.stop();
     }
 
     @Test
     public void splitClientControlNotifications() throws IOException, TimeoutException, InterruptedException, URISyntaxException {
-        SplitMockServer splitServer = new SplitMockServer();
-        SSEMockServer.SseEventQueue eventQueue = new SSEMockServer.SseEventQueue();
-        SSEMockServer sseServer = buildSSEMockServer(eventQueue);
+        SplitServersMock.SseEventQueue eventQueue = new SplitServersMock.SseEventQueue();
+        SplitServersMock splitServer = buildSSEMockServer(eventQueue);
 
         splitServer.start();
-        sseServer.start();
+        final String URL = "http://localhost:" + splitServer.getPort();
 
         SplitClientConfig config = SplitClientConfig.builder()
                 .setBlockUntilReadyTimeout(10000)
-                .endpoint(splitServer.getUrl(), splitServer.getUrl())
-                .authServiceURL(String.format("%s/api/auth/enabled", splitServer.getUrl()))
-                .streamingServiceURL("http://localhost:" + sseServer.getPort())
-                .featuresRefreshRate(20)
+                .endpoint(URL, URL)
+                .authServiceURL(URL + "/api/auth/enabled")
+                .streamingServiceURL(URL)
                 .streamingEnabled(true)
+                .featuresRefreshRate(20)
+                .segmentsRefreshRate(30)
                 .build();
 
         SplitFactory factory = SplitFactoryBuilder.build("fake-api-token", config);
@@ -334,47 +351,88 @@ public class SplitClientIntegrationTest {
 
         client.destroy();
         splitServer.stop();
-        sseServer.stop();
     }
 
     @Test
+    @Ignore
     public void splitClientMultiFactory() throws IOException, TimeoutException, InterruptedException, URISyntaxException {
-        SplitMockServer splitServer = new SplitMockServer();
+        SplitServersMock.SseEventQueue eventQueue1 = new SplitServersMock.SseEventQueue();
+        SplitServersMock splitServer1 = buildSSEMockServer(eventQueue1);
 
-        SSEMockServer.SseEventQueue eventQueue1 = new SSEMockServer.SseEventQueue();
-        SSEMockServer sseServer1 = buildSSEMockServer(eventQueue1);
+        SplitServersMock.SseEventQueue eventQueue2 = new SplitServersMock.SseEventQueue();
+        SplitServersMock splitServer2 = buildSSEMockServer(eventQueue2);
 
-        SSEMockServer.SseEventQueue eventQueue2 = new SSEMockServer.SseEventQueue();
-        SSEMockServer sseServer2 = buildSSEMockServer(eventQueue2);
+        SplitServersMock.SseEventQueue eventQueue3 = new SplitServersMock.SseEventQueue();
+        SplitServersMock splitServer3 = buildSSEMockServer(eventQueue3);
 
-        SSEMockServer.SseEventQueue eventQueue3 = new SSEMockServer.SseEventQueue();
-        SSEMockServer sseServer3 = buildSSEMockServer(eventQueue3);
+        SplitServersMock.SseEventQueue eventQueue4 = new SplitServersMock.SseEventQueue();
+        SplitServersMock splitServer4 = buildSSEMockServer(eventQueue4);
 
-        SSEMockServer.SseEventQueue eventQueue4 = new SSEMockServer.SseEventQueue();
-        SSEMockServer sseServer4 = buildSSEMockServer(eventQueue4);
+        splitServer1.start();
+        splitServer2.start();
+        splitServer3.start();
+        splitServer4.start();
 
-        splitServer.start();
-        sseServer1.start();
-        sseServer2.start();
-        sseServer3.start();
-        sseServer4.start();
 
-        SplitClientConfig config1 = buildSplitClientConfig("enabled", splitServer.getUrl(), sseServer1.getPort(), true, 20);
+        final String URL1 = "http://localhost:" + splitServer1.getPort();
+        final String URL2 = "http://localhost:" + splitServer2.getPort();
+        final String URL3 = "http://localhost:" + splitServer3.getPort();
+        final String URL4 = "http://localhost:" + splitServer4.getPort();
+
+        SplitClientConfig config1 = SplitClientConfig.builder()
+                .setBlockUntilReadyTimeout(10000)
+                .endpoint(URL1, URL1)
+                .authServiceURL(URL1 + "/api/auth/enabled")
+                .streamingServiceURL(URL1)
+                .streamingEnabled(true)
+                .featuresRefreshRate(20)
+                .segmentsRefreshRate(30)
+                .build();
+
+        SplitClientConfig config2 = SplitClientConfig.builder()
+                .setBlockUntilReadyTimeout(10000)
+                .endpoint(URL2, URL2)
+                .authServiceURL(URL2 + "/api/auth/enabled")
+                .streamingServiceURL(URL2)
+                .streamingEnabled(true)
+                .featuresRefreshRate(20)
+                .segmentsRefreshRate(30)
+                .build();
+
+        SplitClientConfig config3 = SplitClientConfig.builder()
+                .setBlockUntilReadyTimeout(10000)
+                .endpoint(URL3, URL3)
+                .authServiceURL(URL3 + "/api/auth/enabled")
+                .streamingServiceURL(URL3)
+                .streamingEnabled(true)
+                .featuresRefreshRate(20)
+                .segmentsRefreshRate(30)
+                .build();
+
+        SplitClientConfig config4 = SplitClientConfig.builder()
+                .setBlockUntilReadyTimeout(10000)
+                .endpoint(URL4, URL4)
+                .authServiceURL(URL4 + "/api/auth/enabled")
+                .streamingServiceURL(URL4)
+                .streamingEnabled(true)
+                .featuresRefreshRate(20)
+                .segmentsRefreshRate(30)
+                .build();
+
+
+
         SplitFactory factory1 = SplitFactoryBuilder.build("fake-api-token-1", config1);
         SplitClient client1 = factory1.client();
         client1.blockUntilReady();
 
-        SplitClientConfig config2 = buildSplitClientConfig("enabled", splitServer.getUrl(), sseServer2.getPort(), true, 20);
         SplitFactory factory2 = SplitFactoryBuilder.build("fake-api-token-2", config2);
         SplitClient client2 = factory2.client();
         client2.blockUntilReady();
 
-        SplitClientConfig config3 = buildSplitClientConfig("enabled", splitServer.getUrl(), sseServer3.getPort(), true, 20);
         SplitFactory factory3 = SplitFactoryBuilder.build("fake-api-token-3", config3);
         SplitClient client3 = factory3.client();
         client3.blockUntilReady();
 
-        SplitClientConfig config4 = buildSplitClientConfig("disabled", splitServer.getUrl(), sseServer4.getPort(), true, 50);
         SplitFactory factory4 = SplitFactoryBuilder.build("fake-api-token-4", config4);
         SplitClient client4 = factory4.client();
         client4.blockUntilReady();
@@ -459,23 +517,30 @@ public class SplitClientIntegrationTest {
         client2.destroy();
         client3.destroy();
         client4.destroy();
-        splitServer.stop();
-        sseServer1.stop();
-        sseServer2.stop();
-        sseServer3.stop();
-        sseServer4.stop();
+        splitServer1.stop();
+        splitServer2.stop();
+        splitServer3.stop();
+        splitServer4.stop();
     }
 
     @Test
     public void keepAlive() throws IOException, TimeoutException, InterruptedException, URISyntaxException {
-        SplitMockServer splitServer = new SplitMockServer();
-        SSEMockServer.SseEventQueue eventQueue = new SSEMockServer.SseEventQueue();
-        SSEMockServer sseServer = buildSSEMockServer(eventQueue);
+        SplitServersMock.SseEventQueue eventQueue = new SplitServersMock.SseEventQueue();
+        SplitServersMock splitServer = buildSSEMockServer(eventQueue);
 
         splitServer.start();
-        sseServer.start();
+        final String URL = "http://localhost:" + splitServer.getPort();
 
-        SplitClientConfig config = buildSplitClientConfig("enabled", splitServer.getUrl(), sseServer.getPort(), true, 50);
+        SplitClientConfig config = SplitClientConfig.builder()
+                .setBlockUntilReadyTimeout(10000)
+                .endpoint(URL, URL)
+                .authServiceURL(URL + "/api/auth/enabled")
+                .streamingServiceURL(URL)
+                .streamingEnabled(true)
+                .featuresRefreshRate(50)
+                .segmentsRefreshRate(30)
+                .build();
+
         SplitFactory factory = SplitFactoryBuilder.build("fake-api-token-1", config);
         SplitClient client = factory.client();
         client.blockUntilReady();
@@ -493,26 +558,14 @@ public class SplitClientIntegrationTest {
 
         client.destroy();
         splitServer.stop();
-        sseServer.stop();
     }
 
-    private SSEMockServer buildSSEMockServer(SSEMockServer.SseEventQueue eventQueue) {
-        return new SSEMockServer(eventQueue, (token, version, channel) -> {
+    private static SplitServersMock buildSSEMockServer(SplitServersMock.SseEventQueue eventQueue) {
+        return new SplitServersMock(eventQueue, (token, version, channel) -> {
             if (!"1.1".equals(version)) {
                 return new Pair<>(new OutboundEvent.Builder().data("wrong version").build(), false);
             }
             return new Pair<>(null, true);
         });
-    }
-
-    private SplitClientConfig buildSplitClientConfig(String authUrl, String splitServerUrl, int sseServerPort, boolean streamingEnabled, int featuresRefreshRate) {
-        return SplitClientConfig.builder()
-                .setBlockUntilReadyTimeout(10000)
-                .endpoint(splitServerUrl, splitServerUrl)
-                .authServiceURL(String.format("%s/api/auth/%s", splitServerUrl, authUrl))
-                .streamingServiceURL("http://localhost:" + sseServerPort)
-                .featuresRefreshRate(featuresRefreshRate)
-                .streamingEnabled(streamingEnabled)
-                .build();
     }
 }
