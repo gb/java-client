@@ -303,10 +303,9 @@ public class SplitClientIntegrationTest {
                     .data("{\"id\":\"2222\",\"clientId\":\"3333\",\"timestamp\":1588254699236,\"encoding\":\"json\",\"channel\":\"[?occupancy=metrics.publishers]control_pri\",\"data\":\"{\\\"type\\\":\\\"CONTROL\\\",\\\"controlType\\\":\\\"STREAMING_PAUSED\\\"}\"}")
                     .build();
             eventQueue.push(sseEventPause);
-            Thread.sleep(2000);
-
-            result = client.getTreatment("admin", "push_test");
-            Assert.assertEquals("after_notification_received", result);
+            Awaitility.await()
+                    .atMost(10, TimeUnit.SECONDS)
+                    .until(() -> "after_notification_received".equals(client.getTreatment("admin", "push_test")));
 
             OutboundSseEvent sseEventSplitUpdate = new OutboundEvent
                     .Builder()
@@ -498,12 +497,10 @@ public class SplitClientIntegrationTest {
             Assert.assertEquals("on_whitelist", result);
 
             // wait to check keep alive notification.
-            Thread.sleep(80000);
-
             // must reconnect and after the second syncAll the result must be different
-            result = client.getTreatment("admin", "push_test");
-            Assert.assertEquals("split_killed", result);
-
+            Awaitility.await()
+                    .atMost(100, TimeUnit.SECONDS)
+                    .until(() -> "split_killed".equals(client.getTreatment("admin", "push_test")));
             client.destroy();
         } finally {
             splitServer.stop();
