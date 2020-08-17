@@ -47,7 +47,7 @@ public class SplitMockServer {
                     case "/api/splitChanges?since=1585948850111":
                         return new MockResponse().setBody(inputStreamToString("splits_killed.json"));
                     case "/api/segmentChanges/segment-test?since=-1":
-                        return new MockResponse().setBody("{\"name\": \"segment3\",\"added\": [],\"removed\": [],\"since\": -1,\"till\": -1}");
+                        return new MockResponse().setBody("{\"name\": \"segment-test\",\"added\": [],\"removed\": [],\"since\": -1,\"till\": -1}");
                     case "/api/segmentChanges/segment3?since=-1":
                         return new MockResponse().setBody(inputStreamToString("segment3.json"));
                     case "/api/segmentChanges/segment3?since=1585948850110":
