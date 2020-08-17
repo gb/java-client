@@ -33,7 +33,6 @@ public class SplitClientIntegrationTest {
                 .streamingServiceURL("http://localhost:" + sseServer.getPort())
                 .featuresRefreshRate(5)
                 .streamingEnabled(true)
-                .enableDebug()
                 .build();
 
         SplitFactory factory = SplitFactoryBuilder.build("fake-api-token", config);
