@@ -32,6 +32,7 @@ public class SplitClientIntegrationTest {
                 .authServiceURL(String.format("%s/api/auth/enabled", splitServer.getUrl()))
                 .streamingServiceURL("http://localhost:" + sseServer.getPort())
                 .streamingEnabled(true)
+                .featuresRefreshRate(5)
                 .build();
 
         SplitFactory factory = SplitFactoryBuilder.build("fake-api-token", config);
