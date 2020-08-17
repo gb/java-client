@@ -167,7 +167,7 @@ public class SplitServersMock {
             switch (segmentName) {
                 case "segment-test":
                     return Response
-                            .ok("{\"name\": \"segment3\",\"added\": [],\"removed\": [],\"since\": -1,\"till\": -1}")
+                            .ok("{\"name\": \"segment-test\",\"added\": [],\"removed\": [],\"since\": -1,\"till\": -1}")
                             .type(MediaType.APPLICATION_JSON_TYPE)
                             .build();
                 case "segment3":
