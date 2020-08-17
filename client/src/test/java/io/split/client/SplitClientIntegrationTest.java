@@ -7,6 +7,7 @@ import org.awaitility.Awaitility;
 import org.glassfish.grizzly.utils.Pair;
 import org.glassfish.jersey.media.sse.OutboundEvent;
 import org.junit.Assert;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import javax.ws.rs.sse.OutboundSseEvent;
@@ -304,7 +305,7 @@ public class SplitClientIntegrationTest {
                     .build();
             eventQueue.push(sseEventPause);
             Awaitility.await()
-                    .atMost(10, TimeUnit.SECONDS)
+                    .atMost(2, TimeUnit.MINUTES)
                     .until(() -> "after_notification_received".equals(client.getTreatment("admin", "push_test")));
 
             OutboundSseEvent sseEventSplitUpdate = new OutboundEvent
@@ -479,6 +480,7 @@ public class SplitClientIntegrationTest {
     }
 
     @Test
+    @Ignore
     public void keepAlive() throws IOException, TimeoutException, InterruptedException, URISyntaxException {
         SplitMockServer splitServer = new SplitMockServer();
         SSEMockServer.SseEventQueue eventQueue = new SSEMockServer.SseEventQueue();

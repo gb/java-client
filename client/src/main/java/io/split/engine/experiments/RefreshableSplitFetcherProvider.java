@@ -30,7 +30,7 @@ public class RefreshableSplitFetcherProvider implements Closeable {
     private final SplitParser _splitParser;
     private final SplitChangeFetcher _splitChangeFetcher;
     private final AtomicLong _refreshEveryNSeconds;
-    private final AtomicReference<RefreshableSplitFetcher> _splitFetcher = new AtomicReference<RefreshableSplitFetcher>();
+    private final AtomicReference<RefreshableSplitFetcher> _splitFetcher = new AtomicReference<>();
     private final SDKReadinessGates _gates;
     private final AtomicReference<ScheduledExecutorService> _executorService = new AtomicReference<>();
     private final ScheduledExecutorService _scheduledExecutorService;

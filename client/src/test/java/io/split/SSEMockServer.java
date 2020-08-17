@@ -28,13 +28,12 @@ public class SSEMockServer {
     private static final String BASE_URL = "http://localhost:%d";
     private final SseEventQueue _queue;
     private final Validator _validator;
-    private AtomicInteger _port;
+    private final AtomicInteger _port = new AtomicInteger();
     private HttpServer _server;
 
     public SSEMockServer(SseEventQueue queue, Validator validator) {
         _queue = queue;
         _validator = validator;
-        _port = new AtomicInteger();
     }
 
     public synchronized void start() throws IOException {
