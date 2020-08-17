@@ -40,7 +40,9 @@ public class SplitSseEventSourceTest {
         boolean result = splitSseEventSource.open(target);
 
         Assert.assertTrue(result);
-        Assert.assertEquals(SseStatus.CONNECTED, sseStatus.get());
+        Awaitility.await()
+                .atMost(50L, TimeUnit.SECONDS)
+                .untilAsserted(() -> Assert.assertEquals(SseStatus.CONNECTED, sseStatus.get()));
         Assert.assertTrue(splitSseEventSource.isOpen());
 
         try {
@@ -53,7 +55,7 @@ public class SplitSseEventSourceTest {
     }
 
     @Test
-    public void openShouldNotConnect() throws IOException, URISyntaxException, InterruptedException {
+    public void openShouldNotConnect() throws IOException, URISyntaxException {
         SSEMockServer.SseEventQueue eventQueue = new SSEMockServer.SseEventQueue();
         SSEMockServer sseServer = buildSSEMockServer(eventQueue);
 
@@ -71,12 +73,12 @@ public class SplitSseEventSourceTest {
                 .addParameter("v", "1.1")
                 .build());
 
-        Thread.sleep(2000);
-
         boolean result = splitSseEventSource.open(target);
 
         Assert.assertFalse(result);
-        Assert.assertEquals(SseStatus.NONRETRYABLE_ERROR, sseStatus.get());
+        Awaitility.await()
+                .atMost(50L, TimeUnit.SECONDS)
+                .untilAsserted(() -> Assert.assertEquals(SseStatus.NONRETRYABLE_ERROR, sseStatus.get()));
         Assert.assertFalse(splitSseEventSource.isOpen());
 
         sseServer.stop();
@@ -104,20 +106,23 @@ public class SplitSseEventSourceTest {
         boolean result = splitSseEventSource.open(target);
 
         Assert.assertTrue(result);
-        Assert.assertEquals(SseStatus.CONNECTED, sseStatus.get());
+        Awaitility.await()
+                .atMost(50L, TimeUnit.SECONDS)
+                .untilAsserted(() -> Assert.assertEquals(SseStatus.CONNECTED, sseStatus.get()));
         Assert.assertTrue(splitSseEventSource.isOpen());
 
         splitSseEventSource.close();
         Awaitility.await()
-                .atMost(10, TimeUnit.SECONDS)
-                .until(() -> SseStatus.DISCONNECTED.equals(sseStatus.get()));
+                .atMost(50L, TimeUnit.SECONDS)
+                .untilAsserted(() -> Assert.assertEquals(SseStatus.DISCONNECTED, sseStatus.get()));
+
         Assert.assertFalse(splitSseEventSource.isOpen());
 
         sseServer.stop();
     }
 
     @Test
-    public void openShouldReceiveNotification() throws IOException, URISyntaxException, InterruptedException {
+    public void openShouldReceiveNotification() throws IOException, URISyntaxException {
         SSEMockServer.SseEventQueue eventQueue = new SSEMockServer.SseEventQueue();
         SSEMockServer sseServer = buildSSEMockServer(eventQueue);
 
@@ -138,7 +143,9 @@ public class SplitSseEventSourceTest {
         boolean result = splitSseEventSource.open(target);
 
         Assert.assertTrue(result);
-        Assert.assertEquals(SseStatus.CONNECTED, sseStatus.get());
+        Awaitility.await()
+                .atMost(50L, TimeUnit.SECONDS)
+                .untilAsserted(() -> Assert.assertEquals(SseStatus.CONNECTED, sseStatus.get()));
         Assert.assertTrue(splitSseEventSource.isOpen());
 
         OutboundSseEvent sseEvent = new OutboundEvent
@@ -148,10 +155,13 @@ public class SplitSseEventSourceTest {
                 .build();
         eventQueue.push(sseEvent);
 
-        Thread.sleep(2000);
+        Awaitility.await()
+                .atMost(50L, TimeUnit.SECONDS)
+                .untilAsserted(() -> Assert.assertNotNull(inboundSseEvent));
 
-        Assert.assertNotNull(inboundSseEvent);
-        Assert.assertEquals("message", inboundSseEvent.get().getName());
+        Awaitility.await()
+                .atMost(50L, TimeUnit.SECONDS)
+                .untilAsserted(() -> Assert.assertEquals("message", inboundSseEvent.get().getName()));
 
         sseServer.stop();
     }

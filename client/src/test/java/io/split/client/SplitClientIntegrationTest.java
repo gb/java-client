@@ -7,7 +7,6 @@ import org.awaitility.Awaitility;
 import org.glassfish.grizzly.utils.Pair;
 import org.glassfish.jersey.media.sse.OutboundEvent;
 import org.junit.Assert;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import javax.ws.rs.sse.OutboundSseEvent;
@@ -24,147 +23,138 @@ public class SplitClientIntegrationTest {
         SSEMockServer.SseEventQueue eventQueue = new SSEMockServer.SseEventQueue();
         SSEMockServer sseServer = buildSSEMockServer(eventQueue);
 
-        try {
-            splitServer.start();
-            sseServer.start();
+        splitServer.start();
+        sseServer.start();
 
-            SplitClientConfig config = SplitClientConfig.builder()
-                    .setBlockUntilReadyTimeout(10000)
-                    .endpoint(splitServer.getUrl(), splitServer.getUrl())
-                    .authServiceURL(String.format("%s/api/auth/enabled", splitServer.getUrl()))
-                    .streamingServiceURL("http://localhost:" + sseServer.getPort())
-                    .streamingEnabled(true)
-                    .build();
+        SplitClientConfig config = SplitClientConfig.builder()
+                .setBlockUntilReadyTimeout(10000)
+                .endpoint(splitServer.getUrl(), splitServer.getUrl())
+                .authServiceURL(String.format("%s/api/auth/enabled", splitServer.getUrl()))
+                .streamingServiceURL("http://localhost:" + sseServer.getPort())
+                .streamingEnabled(true)
+                .build();
 
-            SplitFactory factory = SplitFactoryBuilder.build("fake-api-token", config);
-            SplitClient client = factory.client();
-            client.blockUntilReady();
+        SplitFactory factory = SplitFactoryBuilder.build("fake-api-token", config);
+        SplitClient client = factory.client();
+        client.blockUntilReady();
 
-            String result = client.getTreatment("admin", "push_test");
-            Assert.assertEquals("on_whitelist", result);
+        String result = client.getTreatment("admin", "push_test");
+        Assert.assertEquals("on_whitelist", result);
 
-            // SPLIT_UPDATED should fetch -> changeNumber > since
-            OutboundSseEvent sseEvent1 = new OutboundEvent
-                    .Builder()
-                    .name("message")
-                    .data("{\"id\":\"22\",\"clientId\":\"22\",\"timestamp\":1592590436082,\"encoding\":\"json\",\"channel\":\"xxxx_xxxx_splits\",\"data\":\"{\\\"type\\\":\\\"SPLIT_UPDATE\\\",\\\"changeNumber\\\":1585948850111}\"}")
-                    .build();
-            eventQueue.push(sseEvent1);
+        // SPLIT_UPDATED should fetch -> changeNumber > since
+        OutboundSseEvent sseEvent1 = new OutboundEvent
+                .Builder()
+                .name("message")
+                .data("{\"id\":\"22\",\"clientId\":\"22\",\"timestamp\":1592590436082,\"encoding\":\"json\",\"channel\":\"xxxx_xxxx_splits\",\"data\":\"{\\\"type\\\":\\\"SPLIT_UPDATE\\\",\\\"changeNumber\\\":1585948850111}\"}")
+                .build();
+        eventQueue.push(sseEvent1);
 
-            Awaitility.await()
-                    .atMost(10L, TimeUnit.SECONDS)
-                    .until(() -> "after_notification_received".equals(client.getTreatment("admin", "push_test")));
+        Awaitility.await()
+                .atMost(50L, TimeUnit.SECONDS)
+                .until(() -> "after_notification_received".equals(client.getTreatment("admin", "push_test")));
 
-            // SPLIT_UPDATED should not fetch -> changeNumber < since
-            OutboundSseEvent sseEvent4 = new OutboundEvent
-                    .Builder()
-                    .name("message")
-                    .data("{\"id\":\"22\",\"clientId\":\"22\",\"timestamp\":1592590436082,\"encoding\":\"json\",\"channel\":\"xxxx_xxxx_splits\",\"data\":\"{\\\"type\\\":\\\"SPLIT_UPDATE\\\",\\\"changeNumber\\\":1585948850109}\"}")
-                    .build();
-            eventQueue.push(sseEvent4);
+        // SPLIT_UPDATED should not fetch -> changeNumber < since
+        OutboundSseEvent sseEvent4 = new OutboundEvent
+                .Builder()
+                .name("message")
+                .data("{\"id\":\"22\",\"clientId\":\"22\",\"timestamp\":1592590436082,\"encoding\":\"json\",\"channel\":\"xxxx_xxxx_splits\",\"data\":\"{\\\"type\\\":\\\"SPLIT_UPDATE\\\",\\\"changeNumber\\\":1585948850109}\"}")
+                .build();
+        eventQueue.push(sseEvent4);
 
-            Awaitility.await()
-                    .atMost(10L, TimeUnit.SECONDS)
-                    .until(() -> "after_notification_received".equals(client.getTreatment("admin", "push_test"))
-                            && "on_rollout".equals(client.getTreatment("test_in_segment", "push_test")));
+        Awaitility.await()
+                .atMost(50L, TimeUnit.SECONDS)
+                .until(() -> "after_notification_received".equals(client.getTreatment("admin", "push_test"))
+                    && "on_rollout".equals(client.getTreatment("test_in_segment", "push_test")));
 
-            OutboundSseEvent sseEvent2 = new OutboundEvent
-                    .Builder()
-                    .name("message")
-                    .data("{\"id\":\"22\",\"clientId\":\"22\",\"timestamp\":1592591696052,\"encoding\":\"json\",\"channel\":\"xxxx_xxxx_segments\",\"data\":\"{\\\"type\\\":\\\"SEGMENT_UPDATE\\\",\\\"changeNumber\\\":1585948850111,\\\"segmentName\\\":\\\"segment3\\\"}\"}")
-                    .build();
-            eventQueue.push(sseEvent2);
+        OutboundSseEvent sseEvent2 = new OutboundEvent
+                .Builder()
+                .name("message")
+                .data("{\"id\":\"22\",\"clientId\":\"22\",\"timestamp\":1592591696052,\"encoding\":\"json\",\"channel\":\"xxxx_xxxx_segments\",\"data\":\"{\\\"type\\\":\\\"SEGMENT_UPDATE\\\",\\\"changeNumber\\\":1585948850111,\\\"segmentName\\\":\\\"segment3\\\"}\"}")
+                .build();
+        eventQueue.push(sseEvent2);
 
-            Awaitility.await()
-                    .atMost(10L, TimeUnit.SECONDS)
-                    .until(() -> "in_segment_match".equals(client.getTreatment("test_in_segment", "push_test")));
+        Awaitility.await()
+                .atMost(50L, TimeUnit.SECONDS)
+                .until(() -> "in_segment_match".equals(client.getTreatment("test_in_segment", "push_test")));
 
-            // SEGMENT_UPDATE should not fetch -> changeNumber < since
-            OutboundSseEvent sseEvent5 = new OutboundEvent
-                    .Builder()
-                    .name("message")
-                    .data("{\"id\":\"22\",\"clientId\":\"22\",\"timestamp\":1592591696052,\"encoding\":\"json\",\"channel\":\"xxxx_xxxx_segments\",\"data\":\"{\\\"type\\\":\\\"SEGMENT_UPDATE\\\",\\\"changeNumber\\\":1585948850109,\\\"segmentName\\\":\\\"segment3\\\"}\"}")
-                    .build();
-            eventQueue.push(sseEvent5);
+        // SEGMENT_UPDATE should not fetch -> changeNumber < since
+        OutboundSseEvent sseEvent5 = new OutboundEvent
+                .Builder()
+                .name("message")
+                .data("{\"id\":\"22\",\"clientId\":\"22\",\"timestamp\":1592591696052,\"encoding\":\"json\",\"channel\":\"xxxx_xxxx_segments\",\"data\":\"{\\\"type\\\":\\\"SEGMENT_UPDATE\\\",\\\"changeNumber\\\":1585948850109,\\\"segmentName\\\":\\\"segment3\\\"}\"}")
+                .build();
+        eventQueue.push(sseEvent5);
 
-            Awaitility.await()
-                    .atMost(10L, TimeUnit.SECONDS)
-                    .until(() -> "in_segment_match".equals(client.getTreatment("test_in_segment", "push_test")));
+        Awaitility.await()
+                .atMost(50L, TimeUnit.SECONDS)
+                .until(() -> "in_segment_match".equals(client.getTreatment("test_in_segment", "push_test")));
 
-            // SPLIT_KILL should fetch.
-            OutboundSseEvent sseEvent3 = new OutboundEvent
-                    .Builder()
-                    .name("message")
-                    .data("{\"id\":\"22\",\"clientId\":\"22\",\"timestamp\":1592591081575,\"encoding\":\"json\",\"channel\":\"xxxx_xxxx_splits\",\"data\":\"{\\\"type\\\":\\\"SPLIT_KILL\\\",\\\"changeNumber\\\":1585948850112,\\\"defaultTreatment\\\":\\\"split_killed\\\",\\\"splitName\\\":\\\"push_test\\\"}\"}")
-                    .build();
-            eventQueue.push(sseEvent3);
+        // SPLIT_KILL should fetch.
+        OutboundSseEvent sseEvent3 = new OutboundEvent
+                .Builder()
+                .name("message")
+                .data("{\"id\":\"22\",\"clientId\":\"22\",\"timestamp\":1592591081575,\"encoding\":\"json\",\"channel\":\"xxxx_xxxx_splits\",\"data\":\"{\\\"type\\\":\\\"SPLIT_KILL\\\",\\\"changeNumber\\\":1585948850112,\\\"defaultTreatment\\\":\\\"split_killed\\\",\\\"splitName\\\":\\\"push_test\\\"}\"}")
+                .build();
+        eventQueue.push(sseEvent3);
 
-            Awaitility.await()
-                    .atMost(10L, TimeUnit.SECONDS)
-                    .until(() -> "split_killed".equals(client.getTreatment("admin", "push_test")));
-            client.destroy();
-        } finally {
-            splitServer.stop();
-            sseServer.stop();
-        }
+        Awaitility.await()
+                .atMost(50L, TimeUnit.SECONDS)
+                .until(() -> "split_killed".equals(client.getTreatment("admin", "push_test")));
+
+        client.destroy();
+        splitServer.stop();
+        sseServer.stop();
     }
 
     @Test
     public void getTreatmentWithStreamingEnabledAndAuthDisabled() throws IOException, TimeoutException, InterruptedException, URISyntaxException {
         SplitMockServer splitServer = new SplitMockServer();
-        try {
-            splitServer.start();
+        splitServer.start();
 
-            SplitClientConfig config = SplitClientConfig.builder()
-                    .setBlockUntilReadyTimeout(10000)
-                    .endpoint(splitServer.getUrl(), splitServer.getUrl())
-                    .authServiceURL(String.format("%s/api/auth/disabled", splitServer.getUrl()))
-                    .streamingEnabled(true)
-                    .build();
+        SplitClientConfig config = SplitClientConfig.builder()
+                .setBlockUntilReadyTimeout(10000)
+                .endpoint(splitServer.getUrl(), splitServer.getUrl())
+                .authServiceURL(String.format("%s/api/auth/disabled", splitServer.getUrl()))
+                .streamingEnabled(true)
+                .build();
 
-            SplitFactory factory = SplitFactoryBuilder.build("fake-api-token", config);
-            SplitClient client = factory.client();
-            client.blockUntilReady();
+        SplitFactory factory = SplitFactoryBuilder.build("fake-api-token", config);
+        SplitClient client = factory.client();
+        client.blockUntilReady();
 
-            String result = client.getTreatment("admin", "push_test");
-            Assert.assertEquals("on_whitelist", result);
+        String result = client.getTreatment("admin", "push_test");
+        Assert.assertEquals("on_whitelist", result);
 
-            client.destroy();
-        } finally {
-            splitServer.stop();
-        }
+        client.destroy();
+        splitServer.stop();
     }
 
     @Test
     public void getTreatmentWithStreamingDisabled() throws IOException, TimeoutException, InterruptedException, URISyntaxException {
         SplitMockServer splitServer = new SplitMockServer();
-        try {
-            splitServer.start();
+        splitServer.start();
 
-            SplitClientConfig config = SplitClientConfig.builder()
-                    .setBlockUntilReadyTimeout(10000)
-                    .endpoint(splitServer.getUrl(), splitServer.getUrl())
-                    .authServiceURL(String.format("%s/api/auth/enabled", splitServer.getUrl()))
-                    .streamingEnabled(false)
-                    .featuresRefreshRate(5)
-                    .build();
+        SplitClientConfig config = SplitClientConfig.builder()
+                .setBlockUntilReadyTimeout(10000)
+                .endpoint(splitServer.getUrl(), splitServer.getUrl())
+                .authServiceURL(String.format("%s/api/auth/enabled", splitServer.getUrl()))
+                .streamingEnabled(false)
+                .featuresRefreshRate(5)
+                .build();
 
-            SplitFactory factory = SplitFactoryBuilder.build("fake-api-token", config);
-            SplitClient client = factory.client();
-            client.blockUntilReady();
+        SplitFactory factory = SplitFactoryBuilder.build("fake-api-token", config);
+        SplitClient client = factory.client();
+        client.blockUntilReady();
 
-            String result = client.getTreatment("admin", "push_test");
-            Assert.assertEquals("on_whitelist", result);
+        String result = client.getTreatment("admin", "push_test");
+        Assert.assertEquals("on_whitelist", result);
 
-            Thread.sleep(20000);
+        Awaitility.await()
+                .atMost(50L, TimeUnit.SECONDS)
+                .until(() -> "split_killed".equals(client.getTreatment("admin", "push_test")));
 
-            result = client.getTreatment("admin", "push_test");
-            Assert.assertEquals("split_killed", result);
-
-            client.destroy();
-        } finally {
-            splitServer.stop();
-        }
+        client.destroy();
+        splitServer.stop();
     }
 
     @Test
@@ -193,11 +183,10 @@ public class SplitClientIntegrationTest {
                 .data("{\"id\":\"22\",\"clientId\":\"22\",\"timestamp\":1592591081575,\"encoding\":\"json\",\"channel\":\"xxxx_xxxx_splits\",\"data\":\"{\\\"type\\\":\\\"SPLIT_KILL\\\",\\\"changeNumber\\\":1585948850112,\\\"defaultTreatment\\\":\\\"split_killed\\\",\\\"splitName\\\":\\\"push_test\\\"}\"}")
                 .build();
         eventQueue.push(sseEventSplitKill);
-        Thread.sleep(2000);
 
-        List<SplitView> results2 = manager.splits();
-        // TODO: check this.
-        //Assert.assertEquals(2, results2.stream().filter(r -> !r.killed).toArray().length);
+        Awaitility.await()
+                .atMost(2L, TimeUnit.MINUTES)
+                .until(() -> 2 == manager.splits().stream().filter(r -> !r.killed).toArray().length);
 
         splitServer.stop();
         sseServer.stop();
@@ -209,66 +198,60 @@ public class SplitClientIntegrationTest {
         SSEMockServer.SseEventQueue eventQueue = new SSEMockServer.SseEventQueue();
         SSEMockServer sseServer = buildSSEMockServer(eventQueue);
 
-        try {
-            splitServer.start();
-            sseServer.start();
+        splitServer.start();
+        sseServer.start();
 
-            SplitClientConfig config = SplitClientConfig.builder()
-                    .setBlockUntilReadyTimeout(10000)
-                    .endpoint(splitServer.getUrl(), splitServer.getUrl())
-                    .authServiceURL(String.format("%s/api/auth/enabled", splitServer.getUrl()))
-                    .streamingServiceURL("http://localhost:" + sseServer.getPort())
-                    .featuresRefreshRate(20)
-                    .streamingEnabled(true)
-                    .build();
+        SplitClientConfig config = SplitClientConfig.builder()
+                .setBlockUntilReadyTimeout(10000)
+                .endpoint(splitServer.getUrl(), splitServer.getUrl())
+                .authServiceURL(String.format("%s/api/auth/enabled", splitServer.getUrl()))
+                .streamingServiceURL("http://localhost:" + sseServer.getPort())
+                .featuresRefreshRate(20)
+                .streamingEnabled(true)
+                .build();
 
-            SplitFactory factory = SplitFactoryBuilder.build("fake-api-token", config);
-            SplitClient client = factory.client();
-            client.blockUntilReady();
+        SplitFactory factory = SplitFactoryBuilder.build("fake-api-token", config);
+        SplitClient client = factory.client();
+        client.blockUntilReady();
 
-            String result = client.getTreatment("admin", "push_test");
-            Assert.assertEquals("on_whitelist", result);
+        String result = client.getTreatment("admin", "push_test");
+        Assert.assertEquals("on_whitelist", result);
 
-            OutboundSseEvent sseEventWithPublishers = new OutboundEvent
-                    .Builder()
-                    .name("message")
-                    .data("{\"id\":\"222\",\"timestamp\":1588254668328,\"encoding\":\"json\",\"channel\":\"[?occupancy=metrics.publishers]control_pri\",\"data\":\"{\\\"metrics\\\":{\\\"publishers\\\":2}}\",\"name\":\"[meta]occupancy\"}")
-                    .build();
-            eventQueue.push(sseEventWithPublishers);
-            Thread.sleep(2000);
+        OutboundSseEvent sseEventWithPublishers = new OutboundEvent
+                .Builder()
+                .name("message")
+                .data("{\"id\":\"222\",\"timestamp\":1588254668328,\"encoding\":\"json\",\"channel\":\"[?occupancy=metrics.publishers]control_pri\",\"data\":\"{\\\"metrics\\\":{\\\"publishers\\\":2}}\",\"name\":\"[meta]occupancy\"}")
+                .build();
+        eventQueue.push(sseEventWithPublishers);
 
-            OutboundSseEvent sseEventWithoutPublishers = new OutboundEvent
-                    .Builder()
-                    .name("message")
-                    .data("{\"id\":\"222\",\"timestamp\":1588254668328,\"encoding\":\"json\",\"channel\":\"[?occupancy=metrics.publishers]control_pri\",\"data\":\"{\\\"metrics\\\":{\\\"publishers\\\":0}}\",\"name\":\"[meta]occupancy\"}")
-                    .build();
-            eventQueue.push(sseEventWithoutPublishers);
-            Thread.sleep(2000);
+        OutboundSseEvent sseEventWithoutPublishers = new OutboundEvent
+                .Builder()
+                .name("message")
+                .data("{\"id\":\"222\",\"timestamp\":1588254668328,\"encoding\":\"json\",\"channel\":\"[?occupancy=metrics.publishers]control_pri\",\"data\":\"{\\\"metrics\\\":{\\\"publishers\\\":0}}\",\"name\":\"[meta]occupancy\"}")
+                .build();
+        eventQueue.push(sseEventWithoutPublishers);
 
-            OutboundSseEvent sseEventSplitKill = new OutboundEvent
-                    .Builder()
-                    .name("message")
-                    .data("{\"id\":\"22\",\"clientId\":\"22\",\"timestamp\":1592590436082,\"encoding\":\"json\",\"channel\":\"xxxx_xxxx_splits\",\"data\":\"{\\\"type\\\":\\\"SPLIT_UPDATE\\\",\\\"changeNumber\\\":1585948850112}\"}")
-                    .build();
-            eventQueue.push(sseEventSplitKill);
-            Thread.sleep(2000);
+        OutboundSseEvent sseEventSplitKill = new OutboundEvent
+                .Builder()
+                .name("message")
+                .data("{\"id\":\"22\",\"clientId\":\"22\",\"timestamp\":1592590436082,\"encoding\":\"json\",\"channel\":\"xxxx_xxxx_splits\",\"data\":\"{\\\"type\\\":\\\"SPLIT_UPDATE\\\",\\\"changeNumber\\\":1585948850112}\"}")
+                .build();
+        eventQueue.push(sseEventSplitKill);
 
-            result = client.getTreatment("admin", "push_test");
-            Assert.assertEquals("after_notification_received", result);
+        Awaitility.await()
+                .atMost(50L, TimeUnit.SECONDS)
+                .until(() -> "after_notification_received".equals(client.getTreatment("admin", "push_test")));
 
-            eventQueue.push(sseEventWithPublishers);
-            Thread.sleep(2000);
-            eventQueue.push(sseEventSplitKill);
-            Thread.sleep(2000);
+        eventQueue.push(sseEventWithPublishers);
+        eventQueue.push(sseEventSplitKill);
 
-            result = client.getTreatment("admin", "push_test");
-            Assert.assertEquals("split_killed", result);
+        Awaitility.await()
+                .atMost(50L, TimeUnit.SECONDS)
+                .until(() -> "split_killed".equals(client.getTreatment("admin", "push_test")));
 
-            client.destroy();
-        } finally {
-            splitServer.stop();
-            sseServer.stop();
-        }
+        client.destroy();
+        splitServer.stop();
+        sseServer.stop();
     }
 
     @Test
@@ -277,83 +260,80 @@ public class SplitClientIntegrationTest {
         SSEMockServer.SseEventQueue eventQueue = new SSEMockServer.SseEventQueue();
         SSEMockServer sseServer = buildSSEMockServer(eventQueue);
 
-        try {
-            splitServer.start();
-            sseServer.start();
+        splitServer.start();
+        sseServer.start();
 
-            SplitClientConfig config = SplitClientConfig.builder()
-                    .setBlockUntilReadyTimeout(10000)
-                    .endpoint(splitServer.getUrl(), splitServer.getUrl())
-                    .authServiceURL(String.format("%s/api/auth/enabled", splitServer.getUrl()))
-                    .streamingServiceURL("http://localhost:" + sseServer.getPort())
-                    .featuresRefreshRate(20)
-                    .streamingEnabled(true)
-                    .build();
+        SplitClientConfig config = SplitClientConfig.builder()
+                .setBlockUntilReadyTimeout(10000)
+                .endpoint(splitServer.getUrl(), splitServer.getUrl())
+                .authServiceURL(String.format("%s/api/auth/enabled", splitServer.getUrl()))
+                .streamingServiceURL("http://localhost:" + sseServer.getPort())
+                .featuresRefreshRate(20)
+                .streamingEnabled(true)
+                .build();
 
-            SplitFactory factory = SplitFactoryBuilder.build("fake-api-token", config);
-            SplitClient client = factory.client();
-            client.blockUntilReady();
+        SplitFactory factory = SplitFactoryBuilder.build("fake-api-token", config);
+        SplitClient client = factory.client();
+        client.blockUntilReady();
 
-            String result = client.getTreatment("admin", "push_test");
-            Assert.assertEquals("on_whitelist", result);
+        String result = client.getTreatment("admin", "push_test");
+        Assert.assertEquals("on_whitelist", result);
 
-            // STREAMING_PAUSE pause streaming and start periodic fetching.
-            OutboundSseEvent sseEventPause = new OutboundEvent
-                    .Builder()
-                    .name("message")
-                    .data("{\"id\":\"2222\",\"clientId\":\"3333\",\"timestamp\":1588254699236,\"encoding\":\"json\",\"channel\":\"[?occupancy=metrics.publishers]control_pri\",\"data\":\"{\\\"type\\\":\\\"CONTROL\\\",\\\"controlType\\\":\\\"STREAMING_PAUSED\\\"}\"}")
-                    .build();
-            eventQueue.push(sseEventPause);
-            Awaitility.await()
-                    .atMost(2, TimeUnit.MINUTES)
-                    .until(() -> "after_notification_received".equals(client.getTreatment("admin", "push_test")));
+        // STREAMING_PAUSE pause streaming and start periodic fetching.
+        OutboundSseEvent sseEventPause = new OutboundEvent
+                .Builder()
+                .name("message")
+                .data("{\"id\":\"2222\",\"clientId\":\"3333\",\"timestamp\":1588254699236,\"encoding\":\"json\",\"channel\":\"[?occupancy=metrics.publishers]control_pri\",\"data\":\"{\\\"type\\\":\\\"CONTROL\\\",\\\"controlType\\\":\\\"STREAMING_PAUSED\\\"}\"}")
+                .build();
+        eventQueue.push(sseEventPause);
 
-            OutboundSseEvent sseEventSplitUpdate = new OutboundEvent
-                    .Builder()
-                    .name("message")
-                    .data("{\"id\":\"22\",\"clientId\":\"22\",\"timestamp\":1592590436082,\"encoding\":\"json\",\"channel\":\"xxxx_xxxx_splits\",\"data\":\"{\\\"type\\\":\\\"SPLIT_UPDATE\\\",\\\"changeNumber\\\":1585948850112}\"}")
-                    .build();
-            eventQueue.push(sseEventSplitUpdate);
-            Thread.sleep(2000);
+        Awaitility.await()
+                .atMost(50L, TimeUnit.SECONDS)
+                .until(() -> "after_notification_received".equals(client.getTreatment("admin", "push_test")));
 
-            result = client.getTreatment("admin", "push_test");
-            Assert.assertEquals("after_notification_received", result);
+        OutboundSseEvent sseEventSplitUpdate = new OutboundEvent
+                .Builder()
+                .name("message")
+                .data("{\"id\":\"22\",\"clientId\":\"22\",\"timestamp\":1592590436082,\"encoding\":\"json\",\"channel\":\"xxxx_xxxx_splits\",\"data\":\"{\\\"type\\\":\\\"SPLIT_UPDATE\\\",\\\"changeNumber\\\":1585948850112}\"}")
+                .build();
+        eventQueue.push(sseEventSplitUpdate);
 
-            OutboundSseEvent sseEventSplitUpdate2 = new OutboundEvent
-                    .Builder()
-                    .name("message")
-                    .data("{\"id\":\"22\",\"clientId\":\"22\",\"timestamp\":1592590436082,\"encoding\":\"json\",\"channel\":\"xxxx_xxxx_splits\",\"data\":\"{\\\"type\\\":\\\"SPLIT_UPDATE\\\",\\\"changeNumber\\\":1585948850113}\"}")
-                    .build();
-            eventQueue.push(sseEventSplitUpdate2);
-            Thread.sleep(2000);
+        Awaitility.await()
+                .atMost(50L, TimeUnit.SECONDS)
+                .until(() -> "after_notification_received".equals(client.getTreatment("admin", "push_test")));
 
-            result = client.getTreatment("admin", "push_test");
-            Assert.assertEquals("after_notification_received", result);
+        OutboundSseEvent sseEventSplitUpdate2 = new OutboundEvent
+                .Builder()
+                .name("message")
+                .data("{\"id\":\"22\",\"clientId\":\"22\",\"timestamp\":1592590436082,\"encoding\":\"json\",\"channel\":\"xxxx_xxxx_splits\",\"data\":\"{\\\"type\\\":\\\"SPLIT_UPDATE\\\",\\\"changeNumber\\\":1585948850113}\"}")
+                .build();
+        eventQueue.push(sseEventSplitUpdate2);
 
-            OutboundSseEvent sseEventResumed = new OutboundEvent
-                    .Builder()
-                    .name("message")
-                    .data("{\"id\":\"2222\",\"clientId\":\"3333\",\"timestamp\":1588254699236,\"encoding\":\"json\",\"channel\":\"[?occupancy=metrics.publishers]control_pri\",\"data\":\"{\\\"type\\\":\\\"CONTROL\\\",\\\"controlType\\\":\\\"STREAMING_RESUMED\\\"}\"}")
-                    .build();
-            eventQueue.push(sseEventResumed);
-            Thread.sleep(2000);
+        Awaitility.await()
+                .atMost(50L, TimeUnit.SECONDS)
+                .until(() -> "after_notification_received".equals(client.getTreatment("admin", "push_test")));
 
-            OutboundSseEvent sseEventSplitUpdate3 = new OutboundEvent
-                    .Builder()
-                    .name("message")
-                    .data("{\"id\":\"22\",\"clientId\":\"22\",\"timestamp\":1592590436082,\"encoding\":\"json\",\"channel\":\"xxxx_xxxx_splits\",\"data\":\"{\\\"type\\\":\\\"SPLIT_UPDATE\\\",\\\"changeNumber\\\":1585948850112}\"}")
-                    .build();
-            eventQueue.push(sseEventSplitUpdate3);
-            Thread.sleep(2000);
+        OutboundSseEvent sseEventResumed = new OutboundEvent
+                .Builder()
+                .name("message")
+                .data("{\"id\":\"2222\",\"clientId\":\"3333\",\"timestamp\":1588254699236,\"encoding\":\"json\",\"channel\":\"[?occupancy=metrics.publishers]control_pri\",\"data\":\"{\\\"type\\\":\\\"CONTROL\\\",\\\"controlType\\\":\\\"STREAMING_RESUMED\\\"}\"}")
+                .build();
+        eventQueue.push(sseEventResumed);
 
-            result = client.getTreatment("admin", "push_test");
-            Assert.assertEquals("split_killed", result);
+        OutboundSseEvent sseEventSplitUpdate3 = new OutboundEvent
+                .Builder()
+                .name("message")
+                .data("{\"id\":\"22\",\"clientId\":\"22\",\"timestamp\":1592590436082,\"encoding\":\"json\",\"channel\":\"xxxx_xxxx_splits\",\"data\":\"{\\\"type\\\":\\\"SPLIT_UPDATE\\\",\\\"changeNumber\\\":1585948850112}\"}")
+                .build();
+        eventQueue.push(sseEventSplitUpdate3);
 
-            client.destroy();
-        } finally {
-            splitServer.stop();
-            sseServer.stop();
-        }
+        Awaitility.await()
+                .atMost(50L, TimeUnit.SECONDS)
+                .until(() -> "split_killed".equals(client.getTreatment("admin", "push_test")));
+
+        client.destroy();
+        splitServer.stop();
+        sseServer.stop();
     }
 
     @Test
@@ -372,142 +352,147 @@ public class SplitClientIntegrationTest {
         SSEMockServer.SseEventQueue eventQueue4 = new SSEMockServer.SseEventQueue();
         SSEMockServer sseServer4 = buildSSEMockServer(eventQueue4);
 
-        try {
-            splitServer.start();
-            sseServer1.start();
-            sseServer2.start();
-            sseServer3.start();
-            sseServer4.start();
+        splitServer.start();
+        sseServer1.start();
+        sseServer2.start();
+        sseServer3.start();
+        sseServer4.start();
 
-            SplitClientConfig config1 = buildSplitClientConfig("enabled", splitServer.getUrl(), sseServer1.getPort(), true, 20);
-            SplitFactory factory1 = SplitFactoryBuilder.build("fake-api-token-1", config1);
-            SplitClient client1 = factory1.client();
-            client1.blockUntilReady();
+        SplitClientConfig config1 = buildSplitClientConfig("enabled", splitServer.getUrl(), sseServer1.getPort(), true, 20);
+        SplitFactory factory1 = SplitFactoryBuilder.build("fake-api-token-1", config1);
+        SplitClient client1 = factory1.client();
+        client1.blockUntilReady();
 
-            SplitClientConfig config2 = buildSplitClientConfig("enabled", splitServer.getUrl(), sseServer2.getPort(), true, 20);
-            SplitFactory factory2 = SplitFactoryBuilder.build("fake-api-token-2", config2);
-            SplitClient client2 = factory2.client();
-            client2.blockUntilReady();
+        SplitClientConfig config2 = buildSplitClientConfig("enabled", splitServer.getUrl(), sseServer2.getPort(), true, 20);
+        SplitFactory factory2 = SplitFactoryBuilder.build("fake-api-token-2", config2);
+        SplitClient client2 = factory2.client();
+        client2.blockUntilReady();
 
-            SplitClientConfig config3 = buildSplitClientConfig("enabled", splitServer.getUrl(), sseServer3.getPort(), true, 20);
-            SplitFactory factory3 = SplitFactoryBuilder.build("fake-api-token-3", config3);
-            SplitClient client3 = factory3.client();
-            client3.blockUntilReady();
+        SplitClientConfig config3 = buildSplitClientConfig("enabled", splitServer.getUrl(), sseServer3.getPort(), true, 20);
+        SplitFactory factory3 = SplitFactoryBuilder.build("fake-api-token-3", config3);
+        SplitClient client3 = factory3.client();
+        client3.blockUntilReady();
 
-            SplitClientConfig config4 = buildSplitClientConfig("disabled", splitServer.getUrl(), sseServer4.getPort(), true, 50);
-            SplitFactory factory4 = SplitFactoryBuilder.build("fake-api-token-4", config4);
-            SplitClient client4 = factory4.client();
-            client4.blockUntilReady();
+        SplitClientConfig config4 = buildSplitClientConfig("disabled", splitServer.getUrl(), sseServer4.getPort(), true, 50);
+        SplitFactory factory4 = SplitFactoryBuilder.build("fake-api-token-4", config4);
+        SplitClient client4 = factory4.client();
+        client4.blockUntilReady();
 
-            String result1 = client1.getTreatment("admin", "push_test");
-            Assert.assertEquals("on_whitelist", result1);
+        String result1 = client1.getTreatment("admin", "push_test");
+        Assert.assertEquals("on_whitelist", result1);
 
-            String result2 = client2.getTreatment("admin", "push_test");
-            Assert.assertEquals("on_whitelist", result2);
+        String result2 = client2.getTreatment("admin", "push_test");
+        Assert.assertEquals("on_whitelist", result2);
 
-            String result3 = client3.getTreatment("admin", "push_test");
-            Assert.assertEquals("on_whitelist", result3);
+        String result3 = client3.getTreatment("admin", "push_test");
+        Assert.assertEquals("on_whitelist", result3);
 
-            String result4 = client4.getTreatment("admin", "push_test");
-            Assert.assertEquals("on_whitelist", result4);
+        String result4 = client4.getTreatment("admin", "push_test");
+        Assert.assertEquals("on_whitelist", result4);
 
-            OutboundSseEvent sseEventSplitUpdate = new OutboundEvent
-                    .Builder()
-                    .name("message")
-                    .data("{\"id\":\"22\",\"clientId\":\"22\",\"timestamp\":1592590436082,\"encoding\":\"json\",\"channel\":\"xxxx_xxxx_splits\",\"data\":\"{\\\"type\\\":\\\"SPLIT_UPDATE\\\",\\\"changeNumber\\\":1585948850111}\"}")
-                    .build();
-            eventQueue1.push(sseEventSplitUpdate);
-            Thread.sleep(2000);
+        OutboundSseEvent sseEventSplitUpdate = new OutboundEvent
+                .Builder()
+                .name("message")
+                .data("{\"id\":\"22\",\"clientId\":\"22\",\"timestamp\":1592590436082,\"encoding\":\"json\",\"channel\":\"xxxx_xxxx_splits\",\"data\":\"{\\\"type\\\":\\\"SPLIT_UPDATE\\\",\\\"changeNumber\\\":1585948850111}\"}")
+                .build();
+        eventQueue1.push(sseEventSplitUpdate);
 
-            result1 = client1.getTreatment("admin", "push_test");
-            Assert.assertEquals("after_notification_received", result1);
+        Awaitility.await()
+                .atMost(50L, TimeUnit.SECONDS)
+                .until(() -> "after_notification_received".equals(client1.getTreatment("admin", "push_test")));
 
-            result2 = client2.getTreatment("admin", "push_test");
-            Assert.assertEquals("on_whitelist", result2);
+        Awaitility.await()
+                .atMost(50L, TimeUnit.SECONDS)
+                .until(() -> "on_whitelist".equals(client2.getTreatment("admin", "push_test")));
 
-            result3 = client3.getTreatment("admin", "push_test");
-            Assert.assertEquals("on_whitelist", result3);
+        Awaitility.await()
+                .atMost(50L, TimeUnit.SECONDS)
+                .until(() -> "on_whitelist".equals(client3.getTreatment("admin", "push_test")));
 
-            result4 = client4.getTreatment("admin", "push_test");
-            Assert.assertEquals("on_whitelist", result4);
+        Awaitility.await()
+                .atMost(50L, TimeUnit.SECONDS)
+                .until(() -> "on_whitelist".equals(client4.getTreatment("admin", "push_test")));
 
-            eventQueue3.push(sseEventSplitUpdate);
-            Thread.sleep(2000);
+        eventQueue3.push(sseEventSplitUpdate);
 
-            result1 = client1.getTreatment("admin", "push_test");
-            Assert.assertEquals("after_notification_received", result1);
+        Awaitility.await()
+                .atMost(50L, TimeUnit.SECONDS)
+                .until(() -> "after_notification_received".equals(client1.getTreatment("admin", "push_test")));
 
-            result2 = client2.getTreatment("admin", "push_test");
-            Assert.assertEquals("on_whitelist", result2);
+        Awaitility.await()
+                .atMost(50L, TimeUnit.SECONDS)
+                .until(() -> "on_whitelist".equals(client2.getTreatment("admin", "push_test")));
 
-            result3 = client3.getTreatment("admin", "push_test");
-            Assert.assertEquals("after_notification_received", result3);
+        Awaitility.await()
+                .atMost(50L, TimeUnit.SECONDS)
+                .until(() -> "after_notification_received".equals(client3.getTreatment("admin", "push_test")));
 
-            result4 = client4.getTreatment("admin", "push_test");
-            Assert.assertEquals("on_whitelist", result4);
+        Awaitility.await()
+                .atMost(50L, TimeUnit.SECONDS)
+                .until(() -> "on_whitelist".equals(client4.getTreatment("admin", "push_test")));
 
-            OutboundSseEvent sseEventSplitUpdate3 = new OutboundEvent
-                    .Builder()
-                    .name("message")
-                    .data("{\"id\":\"22\",\"clientId\":\"22\",\"timestamp\":1592590436082,\"encoding\":\"json\",\"channel\":\"xxxx_xxxx_splits\",\"data\":\"{\\\"type\\\":\\\"SPLIT_UPDATE\\\",\\\"changeNumber\\\":1585948850112}\"}")
-                    .build();
-            eventQueue3.push(sseEventSplitUpdate3);
-            Thread.sleep(2000);
+        OutboundSseEvent sseEventSplitUpdate3 = new OutboundEvent
+                .Builder()
+                .name("message")
+                .data("{\"id\":\"22\",\"clientId\":\"22\",\"timestamp\":1592590436082,\"encoding\":\"json\",\"channel\":\"xxxx_xxxx_splits\",\"data\":\"{\\\"type\\\":\\\"SPLIT_UPDATE\\\",\\\"changeNumber\\\":1585948850112}\"}")
+                .build();
+        eventQueue3.push(sseEventSplitUpdate3);
 
-            result1 = client1.getTreatment("admin", "push_test");
-            Assert.assertEquals("after_notification_received", result1);
+        Awaitility.await()
+                .atMost(50L, TimeUnit.SECONDS)
+                .until(() -> "after_notification_received".equals(client1.getTreatment("admin", "push_test")));
 
-            result2 = client2.getTreatment("admin", "push_test");
-            Assert.assertEquals("on_whitelist", result2);
+        Awaitility.await()
+                .atMost(50L, TimeUnit.SECONDS)
+                .until(() -> "on_whitelist".equals(client2.getTreatment("admin", "push_test")));
 
-            result3 = client3.getTreatment("admin", "push_test");
-            Assert.assertEquals("split_killed", result3);
+        Awaitility.await()
+                .atMost(50L, TimeUnit.SECONDS)
+                .until(() -> "split_killed".equals(client3.getTreatment("admin", "push_test")));
 
-            result4 = client4.getTreatment("admin", "push_test");
-            Assert.assertEquals("on_whitelist", result4);
+        Awaitility.await()
+                .atMost(50L, TimeUnit.SECONDS)
+                .until(() -> "on_whitelist".equals(client4.getTreatment("admin", "push_test")));
 
-            client1.destroy();
-            client2.destroy();
-            client3.destroy();
-            client4.destroy();
-        } finally {
-            splitServer.stop();
-            sseServer1.stop();
-            sseServer2.stop();
-            sseServer3.stop();
-            sseServer4.stop();
-        }
+        client1.destroy();
+        client2.destroy();
+        client3.destroy();
+        client4.destroy();
+        splitServer.stop();
+        sseServer1.stop();
+        sseServer2.stop();
+        sseServer3.stop();
+        sseServer4.stop();
     }
 
     @Test
-    @Ignore
     public void keepAlive() throws IOException, TimeoutException, InterruptedException, URISyntaxException {
         SplitMockServer splitServer = new SplitMockServer();
         SSEMockServer.SseEventQueue eventQueue = new SSEMockServer.SseEventQueue();
         SSEMockServer sseServer = buildSSEMockServer(eventQueue);
 
-        try {
-            splitServer.start();
-            sseServer.start();
+        splitServer.start();
+        sseServer.start();
 
-            SplitClientConfig config = buildSplitClientConfig("enabled", splitServer.getUrl(), sseServer.getPort(), true, 50);
-            SplitFactory factory = SplitFactoryBuilder.build("fake-api-token-1", config);
-            SplitClient client = factory.client();
-            client.blockUntilReady();
+        SplitClientConfig config = buildSplitClientConfig("enabled", splitServer.getUrl(), sseServer.getPort(), true, 50);
+        SplitFactory factory = SplitFactoryBuilder.build("fake-api-token-1", config);
+        SplitClient client = factory.client();
+        client.blockUntilReady();
 
-            String result = client.getTreatment("admin", "push_test");
-            Assert.assertEquals("on_whitelist", result);
+        String result = client.getTreatment("admin", "push_test");
+        Assert.assertEquals("on_whitelist", result);
 
-            // wait to check keep alive notification.
-            // must reconnect and after the second syncAll the result must be different
-            Awaitility.await()
-                    .atMost(100, TimeUnit.SECONDS)
-                    .until(() -> "split_killed".equals(client.getTreatment("admin", "push_test")));
-            client.destroy();
-        } finally {
-            splitServer.stop();
-            sseServer.stop();
-        }
+        // wait to check keep alive notification.
+        Thread.sleep(80000);
+
+        // must reconnect and after the second syncAll the result must be different
+        Awaitility.await()
+                .atMost(1L, TimeUnit.MINUTES)
+                .untilAsserted(() -> Assert.assertEquals("split_killed", client.getTreatment("admin", "push_test")));
+
+        client.destroy();
+        splitServer.stop();
+        sseServer.stop();
     }
 
     private SSEMockServer buildSSEMockServer(SSEMockServer.SseEventQueue eventQueue) {
