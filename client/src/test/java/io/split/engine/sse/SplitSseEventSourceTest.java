@@ -2,6 +2,7 @@ package io.split.engine.sse;
 
 import io.split.SSEMockServer;
 import org.apache.http.client.utils.URIBuilder;
+import org.awaitility.Awaitility;
 import org.glassfish.grizzly.utils.Pair;
 import org.glassfish.jersey.media.sse.OutboundEvent;
 import org.junit.Assert;
@@ -107,7 +108,9 @@ public class SplitSseEventSourceTest {
         Assert.assertTrue(splitSseEventSource.isOpen());
 
         splitSseEventSource.close();
-        Assert.assertEquals(SseStatus.DISCONNECTED, sseStatus.get());
+        Awaitility.await()
+                .atMost(10, TimeUnit.SECONDS)
+                .until(() -> SseStatus.DISCONNECTED.equals(sseStatus.get()));
         Assert.assertFalse(splitSseEventSource.isOpen());
 
         sseServer.stop();
