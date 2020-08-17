@@ -3,7 +3,7 @@ dist: xenial
 language: java
 
 jdk:
-  - oraclejdk
+  - oraclejdk9
   - openjdk8
 
 git:
