@@ -233,7 +233,7 @@ public class SplitFactoryImpl implements SplitFactory {
                     _log.info("Successful shutdown of httpclient");
                     eventClient.close();
                     _log.info("Successful shutdown of httpclient");
-                    new Thread(syncManager::shutdown).start();
+                    syncManager.shutdown();
                     _log.info("Successful shutdown of syncManager");
                 } catch (IOException e) {
                     _log.error("We could not shutdown split", e);

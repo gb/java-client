@@ -100,7 +100,7 @@ public class PushManagerImp implements PushManager {
         _eventSourceClient.stop();
         stopWorkers();
         if (_nextTokenRefreshTask != null) {
-            _log.warn("Cancel nextTokenRefreshTask");
+            _log.info("Cancel nextTokenRefreshTask");
             _nextTokenRefreshTask.cancel(false);
         }
     }
