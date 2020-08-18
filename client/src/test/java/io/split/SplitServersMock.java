@@ -6,6 +6,7 @@ import org.glassfish.grizzly.http.server.Request;
 import org.glassfish.grizzly.utils.Pair;
 import org.glassfish.hk2.utilities.binding.AbstractBinder;
 import org.glassfish.jersey.grizzly2.httpserver.GrizzlyHttpServerFactory;
+import org.glassfish.jersey.media.sse.OutboundEvent;
 import org.glassfish.jersey.server.ResourceConfig;
 import org.jvnet.hk2.annotations.Service;
 
@@ -29,6 +30,7 @@ import java.net.ServerSocket;
 import java.net.URI;
 import java.util.Scanner;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class SplitServersMock {
@@ -37,6 +39,8 @@ public class SplitServersMock {
     private final Validator _validator;
     private final AtomicInteger _port = new AtomicInteger();
     private HttpServer _server;
+
+    public static final OutboundEvent STOP_SIGNAL_EVENT = new OutboundEvent.Builder().comment("COMMENT").build();
 
     public SplitServersMock(SseEventQueue queue, Validator validator) {
         _queue = queue;
@@ -65,7 +69,7 @@ public class SplitServersMock {
         if (null == _server) {
             throw new IllegalStateException("Server is not running");
         }
-
+        _queue.push(STOP_SIGNAL_EVENT);
         _server.shutdownNow();
     }
 
@@ -102,7 +106,7 @@ public class SplitServersMock {
                                         @QueryParam("channels") String channels,
                                         @QueryParam("v") String version,
                                         @QueryParam("accessToken") String token) {
-            new Thread(() -> {
+            Thread current = new Thread(() -> {
                 Pair<OutboundSseEvent, Boolean> validationResult = _validator.validate(token, version, channels);
                 if (validationResult.getFirst() != null) { // if we need to send an event
                     eventSink.send(validationResult.getFirst());
@@ -116,12 +120,17 @@ public class SplitServersMock {
                 while (!eventSink.isClosed()) {
                     try {
                         OutboundSseEvent event = _eventsToSend.pull();
+                        if (STOP_SIGNAL_EVENT == event) {
+                            eventSink.close();
+                            return;
+                        }
                         eventSink.send(event);
                     } catch (InterruptedException e) {
                         break;
                     }
                 }
-            }).start();
+            });
+            current.start();
         }
 
         @GET
@@ -227,7 +236,9 @@ public class SplitServersMock {
         public SseEventQueue() { _queuedEvents = new LinkedBlockingQueue<>(); }
         public void push(OutboundSseEvent e) { _queuedEvents.offer(e); }
         OutboundSseEvent pull() throws InterruptedException { return _queuedEvents.take(); }
+        OutboundSseEvent poll(Long l, TimeUnit tu) throws InterruptedException { return _queuedEvents.poll(l, tu); }
     }
+
 
     public interface Validator {
         Pair<OutboundSseEvent, Boolean> validate(String token, String version, String channel);
