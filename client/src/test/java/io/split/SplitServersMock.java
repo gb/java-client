@@ -67,12 +67,17 @@ public class SplitServersMock {
                         }));
     }
 
-    public synchronized void stop() throws InterruptedException {
+    public synchronized void stop() {
         if (null == _server) {
             throw new IllegalStateException("Server is not running");
         }
         _queue.push(STOP_SIGNAL_EVENT);
-        Thread.sleep(1000);
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
         _server.shutdownNow();
         if (_waiter.getUnarrivedParties() > 0) {
             _waiter.arriveAndAwaitAdvance();
