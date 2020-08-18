@@ -11,7 +11,6 @@ import org.glassfish.jersey.server.ResourceConfig;
 import org.jvnet.hk2.annotations.Service;
 
 import javax.inject.Inject;
-import javax.inject.Singleton;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
@@ -239,8 +238,6 @@ public class SplitServersMock {
         }
     }
 
-
-    @Singleton
     @Service
     public static class SseEventQueue {
         private final LinkedBlockingQueue<OutboundSseEvent> _queuedEvents;
