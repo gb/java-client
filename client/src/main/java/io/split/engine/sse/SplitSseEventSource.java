@@ -15,13 +15,14 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+
 public class SplitSseEventSource {
     private static final Logger _log = LoggerFactory.getLogger(EventSourceClient.class);
     private static final String SERVER_SENT_EVENTS = "text/event-stream";
     private final AtomicReference<SseState> _state = new AtomicReference<>(SseState.CLOSED);
     private final Function<InboundSseEvent, Void> _eventCallback;
     private final ScheduledExecutorService _executor;
-    private CountDownLatch _firstContactSignal;
     private final Function<SseStatus, Void> _sseStatusHandler;
     private EventInput _eventInput;
 
@@ -38,9 +39,9 @@ public class SplitSseEventSource {
             throw new IllegalStateException("Event Source Already connected.");
         }
 
-        _firstContactSignal = new CountDownLatch(1);
-        _executor.execute(() -> run(target));
-        awaitFirstContact();
+        CountDownLatch firstContactSignal = new CountDownLatch(1);
+        _executor.execute(() -> run(target, firstContactSignal));
+        awaitFirstContact(firstContactSignal);
         return isOpen();
     }
 
@@ -64,7 +65,9 @@ public class SplitSseEventSource {
         CLOSED
     }
 
-    private void run(WebTarget target) {
+    private void run(WebTarget target, CountDownLatch firstContactSignal) {
+        checkNotNull(target);
+        checkNotNull(firstContactSignal);
         try {
             // Initialization
             try {
@@ -75,10 +78,8 @@ public class SplitSseEventSource {
                     _state.set(SseState.OPEN);
                 }
             } finally {
-                if (_firstContactSignal != null) {
-                    // release the signal regardless of event source state or connection request outcome
-                    _firstContactSignal.countDown();
-                }
+                // release the signal regardless of event source state or connection request outcome
+                firstContactSignal.countDown();
             }
 
             // Processing incoming messages
@@ -106,23 +107,20 @@ public class SplitSseEventSource {
             _sseStatusHandler.apply(SseStatus.NONRETRYABLE_ERROR);
             _log.warn(exc.getMessage());
         } finally {
-            if (_eventInput != null) {
-                _eventInput.close();
-            }
-            _state.set(SseState.CLOSED);
+            close();
             _log.debug("SSE connection finished.");
         }
     }
 
-    private void awaitFirstContact() {
+    private void awaitFirstContact(CountDownLatch firstContactSignal) {
         _log.debug("Awaiting first contact signal.");
         try {
-            if (_firstContactSignal == null) {
+            if (firstContactSignal == null) {
                 return;
             }
 
             try {
-                _firstContactSignal.await();
+                firstContactSignal.await();
             } catch (InterruptedException ex) {
                 Thread.currentThread().interrupt();
             }

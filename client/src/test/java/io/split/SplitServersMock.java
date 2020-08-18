@@ -86,8 +86,7 @@ public class SplitServersMock {
             return ss.getLocalPort();
         }
     }
-
-    @Singleton
+    
     @Path("")
     public static class SseResource {
         private final SseEventQueue _eventsToSend;
