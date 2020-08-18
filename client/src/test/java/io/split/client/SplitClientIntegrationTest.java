@@ -537,7 +537,7 @@ public class SplitClientIntegrationTest {
                 .authServiceURL(URL + "/api/auth/enabled")
                 .streamingServiceURL(URL)
                 .streamingEnabled(true)
-                .featuresRefreshRate(50)
+                .featuresRefreshRate(20)
                 .segmentsRefreshRate(30)
                 .build();
 
