@@ -6,7 +6,6 @@ import org.awaitility.Awaitility;
 import org.glassfish.grizzly.utils.Pair;
 import org.glassfish.jersey.media.sse.OutboundEvent;
 import org.junit.Assert;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import javax.ws.rs.sse.OutboundSseEvent;
@@ -354,7 +353,6 @@ public class SplitClientIntegrationTest {
     }
 
     @Test
-    @Ignore
     public void splitClientMultiFactory() throws IOException, TimeoutException, InterruptedException, URISyntaxException {
         SplitServersMock.SseEventQueue eventQueue1 = new SplitServersMock.SseEventQueue();
         SplitServersMock splitServer1 = buildSSEMockServer(eventQueue1);
