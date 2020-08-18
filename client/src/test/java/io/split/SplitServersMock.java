@@ -41,7 +41,7 @@ public class SplitServersMock {
     private HttpServer _server;
     private final Phaser _waiter = new Phaser();
 
-    public static final OutboundEvent STOP_SIGNAL_EVENT = new OutboundEvent.Builder().comment("COMMENT").build();
+    public static final OutboundEvent STOP_SIGNAL_EVENT = new OutboundEvent.Builder().comment("__STOP_SIGNAL__").build();
 
     public SplitServersMock(SseEventQueue queue, Validator validator) {
         _queue = queue;
@@ -67,11 +67,12 @@ public class SplitServersMock {
                         }));
     }
 
-    public synchronized void stop() {
+    public synchronized void stop() throws InterruptedException {
         if (null == _server) {
             throw new IllegalStateException("Server is not running");
         }
         _queue.push(STOP_SIGNAL_EVENT);
+        Thread.sleep(1000);
         _server.shutdownNow();
         if (_waiter.getUnarrivedParties() > 0) {
             _waiter.arriveAndAwaitAdvance();
