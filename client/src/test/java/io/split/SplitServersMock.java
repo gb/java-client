@@ -74,7 +74,9 @@ public class SplitServersMock {
         }
         _queue.push(STOP_SIGNAL_EVENT);
         _server.shutdownNow();
-        _waiter.arriveAndAwaitAdvance();
+        if (_waiter.getUnarrivedParties() > 0) {
+            _waiter.arriveAndAwaitAdvance();
+        }
     }
 
     public int getPort() { return _port.get(); }
