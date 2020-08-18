@@ -166,6 +166,32 @@ public class SplitSseEventSourceTest {
         sseServer.stop();
     }
 
+    /*
+    @Test
+    public void testSSEConnectionClose() throws IOException, URISyntaxException, InterruptedException {
+        SplitServersMock.SseEventQueue eventQueue = new SplitServersMock.SseEventQueue();
+        SplitServersMock mock = new SplitServersMock(eventQueue, (a, b, c) -> new Pair<>(null, true));
+
+        mock.start();
+        SplitSseEventSource splitSseEventSource = new SplitSseEventSource(
+                inboundEvent -> { System.out.println(inboundEvent); return null; },
+                status -> { System.out.println(status); return null; });
+
+        Client client = ClientBuilder.newBuilder().readTimeout(70, TimeUnit.SECONDS).build();
+        WebTarget target = client.target(new URIBuilder("http://localhost:" + mock.getPort())
+                .addParameter("v", "1.1")
+                .build());
+
+        splitSseEventSource.open(target);
+
+        eventQueue.push(new OutboundEvent.Builder().data("ads").build());
+        Thread.sleep(1000);
+        splitSseEventSource.close();
+        mock.stop();
+        Thread.sleep(1000);
+    }
+     */
+
     private SplitServersMock buildSSEMockServer(SplitServersMock.SseEventQueue eventQueue) {
         return new SplitServersMock(eventQueue, (token, version, channel) -> {
             if (!"1.1".equals(version)) {

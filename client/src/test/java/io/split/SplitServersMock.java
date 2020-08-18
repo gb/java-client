@@ -30,6 +30,7 @@ import java.net.ServerSocket;
 import java.net.URI;
 import java.util.Scanner;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.Phaser;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -39,6 +40,7 @@ public class SplitServersMock {
     private final Validator _validator;
     private final AtomicInteger _port = new AtomicInteger();
     private HttpServer _server;
+    private Phaser _waiter = new Phaser(1);
 
     public static final OutboundEvent STOP_SIGNAL_EVENT = new OutboundEvent.Builder().comment("COMMENT").build();
 
@@ -61,6 +63,7 @@ public class SplitServersMock {
                             protected void configure() {
                                 bind(_queue).to(SseEventQueue.class);
                                 bind(_validator).to(Validator.class);
+                                bind(_waiter).to(Phaser.class);
                             }
                         }));
     }
@@ -71,6 +74,7 @@ public class SplitServersMock {
         }
         _queue.push(STOP_SIGNAL_EVENT);
         _server.shutdownNow();
+        _waiter.arriveAndAwaitAdvance();
     }
 
     public int getPort() { return _port.get(); }
@@ -86,11 +90,13 @@ public class SplitServersMock {
     public static class SseResource {
         private final SseEventQueue _eventsToSend;
         private final Validator _validator;
+        private final Phaser _waiter;
 
         @Inject
-        public SseResource(SseEventQueue queue, Validator validator) {
+        public SseResource(SseEventQueue queue, Validator validator, Phaser waiter) {
             _eventsToSend = queue;
             _validator = validator;
+            _waiter = waiter;
         }
 
         @GET
@@ -106,28 +112,33 @@ public class SplitServersMock {
                                         @QueryParam("channels") String channels,
                                         @QueryParam("v") String version,
                                         @QueryParam("accessToken") String token) {
+            _waiter.register();
             Thread current = new Thread(() -> {
-                Pair<OutboundSseEvent, Boolean> validationResult = _validator.validate(token, version, channels);
-                if (validationResult.getFirst() != null) { // if we need to send an event
-                    eventSink.send(validationResult.getFirst());
-                }
-
-                if (!validationResult.getSecond()) { // if validation failed and request should be aborted
-                    eventSink.close();
-                    return;
-                }
-
-                while (!eventSink.isClosed()) {
-                    try {
-                        OutboundSseEvent event = _eventsToSend.pull();
-                        if (STOP_SIGNAL_EVENT == event) {
-                            eventSink.close();
-                            return;
-                        }
-                        eventSink.send(event);
-                    } catch (InterruptedException e) {
-                        break;
+                try {
+                    Pair<OutboundSseEvent, Boolean> validationResult = _validator.validate(token, version, channels);
+                    if (validationResult.getFirst() != null) { // if we need to send an event
+                        eventSink.send(validationResult.getFirst());
                     }
+
+                    if (!validationResult.getSecond()) { // if validation failed and request should be aborted
+                        eventSink.close();
+                        return;
+                    }
+
+                    while (!eventSink.isClosed()) {
+                        try {
+                            OutboundSseEvent event = _eventsToSend.pull();
+                            if (STOP_SIGNAL_EVENT == event) {
+                                eventSink.close();
+                                break;
+                            }
+                            eventSink.send(event);
+                        } catch (InterruptedException e) {
+                            break;
+                        }
+                    }
+                } finally {
+                    _waiter.arriveAndDeregister();
                 }
             });
             current.start();
