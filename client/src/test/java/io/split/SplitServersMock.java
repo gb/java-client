@@ -40,7 +40,7 @@ public class SplitServersMock {
     private final Validator _validator;
     private final AtomicInteger _port = new AtomicInteger();
     private HttpServer _server;
-    private Phaser _waiter = new Phaser(1);
+    private final Phaser _waiter = new Phaser();
 
     public static final OutboundEvent STOP_SIGNAL_EVENT = new OutboundEvent.Builder().comment("COMMENT").build();
 
